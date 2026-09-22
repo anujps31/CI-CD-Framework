@@ -1,0 +1,22 @@
+resources:
+  # Declarative job definitions make Databricks deployments repeatable and reviewable.
+  jobs:
+    dataplatform_ingestion_job:
+      name: dataplatform-ingestion-${bundle.target}
+      tags:
+        framework: plug-and-play-cicd
+        environment: ${bundle.target}
+        # DEFERRED: enable cost attribution tags after Dev functional testing.
+        # CostCenter: dataplatform-dev
+        # Workload: demo-poc
+      tasks:
+        - task_key: ingest_raw
+          notebook_task:
+            notebook_path: ../../notebooks/01_ingest_raw.py
+            base_parameters:
+              catalog: ${var.catalog_name}
+          new_cluster:
+            # DEFERRED: enable the Dev cost-control policy after testing.
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1

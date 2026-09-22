@@ -1,0 +1,2 @@
+# The Service is included in deployment.yml so rollout and service remain one artifact.
+# ClusterIP keeps the sample service internal to the cluster.

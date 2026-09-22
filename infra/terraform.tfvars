@@ -1,0 +1,9 @@
+﻿tenant_id             = "c7ac8f34-d29e-4f96-b9c9-c50d7c861f3b"
+dev_admin_object_ids  = ["fa6eca8d-3824-4f3d-9ef3-dfb98d42af17"]
+dev_data_engineer_object_ids = ["7b81c49a-d00f-472d-bc74-339ec68cb5e5"]
+manage_access_control = true
+enable_unity_catalog = true
+databricks_account_id    = "561acb6d-5c64-4239-9607-43c42751c6f0"
+databricks_client_id     = "6afc6a32-8be0-4dfd-b2a5-08a10d64b1e5"
+## databricks_client_secret = "key-vault Secret"
+databricks_allowed_ip_ranges = ["106.219.172.18/32", "49.43.234.126/32"]

@@ -1,0 +1,17 @@
+**/.terraform/
+**/.terraform.lock.hcl
+**/tfplan
+**/tfplan.*
+*.tfplan
+*.tfstate
+*.tfstate.*
+.env
+.env.*
+!.env.example
+.vscode
+.venv
+__pycache__/
+*.pyc
+coverage.xml
+.coverage
+/artifact/

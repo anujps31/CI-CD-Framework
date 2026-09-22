@@ -1,0 +1,44 @@
+parameters:
+  - name: projectName
+    type: string
+  - name: deploymentProfile
+    type: string
+
+steps:
+  # Build validation assembles the exact artifact used by later deployment stages.
+  - task: UseNode@1
+    inputs:
+      # ADF tooling in this framework expects Node.js 18.
+      version: 18.x
+    displayName: Use Node.js 18
+
+  - bash: |
+      set -euo pipefail
+      # The artifact contains the exact files consumed by the deployment stages.
+      python3 -m pip install --user checkov
+      terraform fmt -check -recursive infra
+      terraform -chdir=infra init -backend=false -input=false
+      terraform -chdir=infra validate
+      if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi
+      if command -v trivy >/dev/null 2>&1; then trivy fs --exit-code 1 --severity HIGH,CRITICAL --skip-dirs .git .; fi
+      if [[ "${{ or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY')) }}" == "True" ]] && command -v docker >/dev/null 2>&1; then
+        docker build --file microservices/orders-api/Dockerfile --tag orders-api:ci microservices/orders-api
+      fi
+    displayName: Validate Terraform and scan IaC
+
+  - bash: |
+      set -euo pipefail
+      mkdir -p "$(Build.ArtifactStagingDirectory)/artifact"
+      cp -R infra adf notebooks dabs microservices projects scripts "$(Build.ArtifactStagingDirectory)/artifact/"
+      printf '%s\n' "$(Build.SourceVersion)" > "$(Build.ArtifactStagingDirectory)/artifact/build-id.txt"
+    displayName: Assemble immutable artifact
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/artifact
+      artifact: build-artifact
+    displayName: Publish build-once artifact
+
+  - bash: ./scripts/cleanup-agent-workspace.sh
+    condition: always()
+    displayName: Clean self-hosted agent workspace

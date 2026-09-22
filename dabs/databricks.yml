@@ -1,0 +1,29 @@
+bundle:
+  # The bundle keeps notebooks and jobs consistent across its named deployment targets.
+  name: dataplatform-bundle
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog_name:
+    description: Unity Catalog catalog
+    # Override per target below; the catalog must exist in the workspace.
+    default: dataplatform_dev
+  workspace_host:
+    description: Databricks workspace URL supplied by the pipeline
+    # Replace only through the environment variable group, never commit a real URL as a secret.
+    default: https://placeholder.azuredatabricks.net
+  # DEFERRED: cluster_policy_id will be restored with Dev cost controls later.
+
+targets:
+  # This framework is Dev-only: dev is the sole bundle target.
+  dev:
+    # Azure branch dev deploys to this Databricks target.
+    mode: development
+    default: true
+    workspace:
+      host: ${var.workspace_host}
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/dev
+    variables:
+      catalog_name: dataplatform_dev

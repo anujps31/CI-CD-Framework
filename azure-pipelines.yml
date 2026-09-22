@@ -1,0 +1,112 @@
+trigger:
+  # This framework is Dev-only: dev is the only branch that starts a push deployment.
+  branches:
+    include:
+      - dev
+  paths:
+    include:
+      - infra/**
+      - adf/**
+      - notebooks/**
+      - dabs/**
+      - microservices/**
+      - pipelines/**
+      - scripts/**
+      - projects/**
+      - tests/**
+
+pr:
+  branches:
+    include:
+      # Feature branches validate through pull requests into dev only.
+      - dev
+
+parameters:
+  - name: projectName
+    type: string
+    # Change this when onboarding a different project folder.
+    default: dataplatform
+  - name: deploymentProfile
+    type: string
+    # Select one profile; this controls which components are deployed.
+    default: ADF_DATABRICKS
+    values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY]
+
+variables:
+  # Create this variable group in Azure DevOps before running the pipeline.
+  - group: vg-dataplatform-shared
+  - name: selfHostedPool
+    # The agent pool must contain Terraform, Azure CLI, Docker, scanners, and Databricks CLI.
+    value: azure-data-platform
+
+stages:
+  # Every deployment consumes the artifact produced by the validation stages above.
+  - stage: Unit_Testing
+    displayName: Unit Testing
+    jobs:
+      - job: UnitTests
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - template: pipelines/templates/ci-unit-tests.yml
+
+  - stage: Code_Quality
+    displayName: Code Review and Code Quality
+    dependsOn: Unit_Testing
+    condition: succeeded()
+    jobs:
+      - job: Quality
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - template: pipelines/templates/ci-quality.yml
+
+  - stage: Build_Validation
+    displayName: Build and Validation
+    dependsOn: Code_Quality
+    condition: succeeded()
+    jobs:
+      - job: Build
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - template: pipelines/templates/ci-build.yml
+            parameters:
+              projectName: ${{ parameters.projectName }}
+              deploymentProfile: ${{ parameters.deploymentProfile }}
+
+  - stage: Vulnerability_Scan
+    displayName: Vulnerability Scan
+    dependsOn: Build_Validation
+    condition: succeeded()
+    jobs:
+      - job: Scan
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - template: pipelines/templates/ci-vulnerability-scan.yml
+            parameters:
+              deploymentProfile: ${{ parameters.deploymentProfile }}
+
+  - template: pipelines/templates/cd-data-pipeline.yml
+    parameters:
+      environmentName: dev
+      # These names must match the Azure DevOps service connection and variable group.
+      serviceConnection: svc-conn-dataplatform-dev
+      variableGroup: vg-dataplatform-dev
+      projectName: ${{ parameters.projectName }}
+      deploymentProfile: ${{ parameters.deploymentProfile }}
+      dependsOn: Vulnerability_Scan
+      branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"
+  - template: pipelines/templates/test-environment.yml
+    parameters:
+      environmentName: dev
+      serviceConnection: svc-conn-dataplatform-dev
+      resourceGroupName: NA_ResourceRG
+      dependsOn: Deploy_dev
+      branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"
+

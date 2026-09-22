@@ -1,0 +1,50 @@
+steps:
+  - bash: |
+      set -euo pipefail
+      # SonarQube, Aqua, tflint, and Checkov must be configured on the agent or service connection.
+      # Developer team owns application test cases under tests/.
+      if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
+        python3 -m pip install -r microservices/orders-api/requirements.txt coverage
+        coverage run -m unittest discover -s tests -v
+        coverage xml -o coverage.xml
+      else
+        echo 'No developer-owned tests found; SonarQube will report no application coverage for this project.'
+      fi
+    displayName: Prepare developer test coverage
+
+  - bash: |
+      set -euo pipefail
+      terraform fmt -check -recursive infra
+      if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi
+      if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet; fi
+    displayName: Code quality and IaC validation
+
+  - task: SonarQubePrepare@7
+    displayName: Prepare SonarQube analysis
+    inputs:
+      # This name must match the Azure DevOps SonarQube service connection.
+      SonarQube: sonarqube-service-connection
+      scannerMode: cli
+      configMode: file
+
+  - task: SonarQubeAnalyze@7
+    displayName: SonarQube code quality and coverage
+
+  - task: SonarQubePublish@7
+    displayName: Publish SonarQube quality gate
+    inputs:
+      pollingTimeoutSec: '300'
+
+  - bash: |
+      set -euo pipefail
+      if command -v scannercli >/dev/null 2>&1; then
+        scannercli scan --local "$(Build.SourcesDirectory)"
+      else
+        echo 'Aqua scannercli is required on the self-hosted agent.' >&2
+        exit 1
+      fi
+    displayName: Aqua code and IaC scan
+
+  - bash: ./scripts/cleanup-agent-workspace.sh
+    condition: always()
+    displayName: Clean self-hosted agent workspace

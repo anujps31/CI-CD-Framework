@@ -1,0 +1,10 @@
+# This manifest records the project names and pipeline inputs required during onboarding.
+# This framework is Dev-only: only the dev environment, subscription, and resource group are used.
+projectName: dataplatform # Project name used by Terraform resource naming.
+deploymentProfile: FULL_PLATFORM # Select one supported deployment profile.
+subscriptionIds:
+  dev: d5691146-731e-4c08-92d4-b0b2703db592 # SyrenPAYGSubscription.
+resourceGroups:
+  dev: NA_ResourceRG # Existing resource group; must match RESOURCE-GROUP-NAME for dev.
+keyVaults:
+  dev: kv-dataplatformdev

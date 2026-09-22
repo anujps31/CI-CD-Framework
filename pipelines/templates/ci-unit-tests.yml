@@ -1,0 +1,27 @@
+steps:
+  # Unit testing runs before cloud deployment and does not require Azure resources.
+  - task: UsePythonVersion@0
+    inputs:
+      # Keep this aligned with the Python version installed on the agent image.
+      versionSpec: '3.12'
+    displayName: Use Python 3.12
+
+  - bash: |
+      set -euo pipefail
+      # Add project-owned test_*.py or *_test.py files under tests/.
+      python -m pip install --upgrade pip
+      python -m pip install -r microservices/orders-api/requirements.txt
+      # Developer team owns application test cases under tests/.
+      if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
+        python -m pip install coverage
+        coverage run -m unittest discover -s tests -v
+        coverage xml -o "$(Build.SourcesDirectory)/coverage.xml"
+      else
+        echo 'No developer-owned test cases found; application test coverage is supplied by the project team.'
+      fi
+      python -m compileall -q notebooks microservices
+    displayName: Unit tests
+
+  - bash: ./scripts/cleanup-agent-workspace.sh
+    condition: always()
+    displayName: Clean self-hosted agent workspace

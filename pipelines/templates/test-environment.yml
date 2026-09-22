@@ -1,0 +1,42 @@
+parameters:
+  - name: environmentName
+    type: string
+    # Display name for the smoke-test stage; normally dev only.
+  - name: serviceConnection
+    type: string
+    # Azure DevOps connection used to read the deployed resource group.
+  - name: resourceGroupName
+    type: string
+    # Exact resource group created by Terraform for this environment.
+  - name: dependsOn
+    type: string
+  - name: branchCondition
+    type: string
+    # Keep the smoke test limited to the branch that deployed the environment.
+    default: "true"
+
+stages:
+  # The smoke stage verifies that deployment created the expected Azure resource boundary.
+  - stage: Test_${{ parameters.environmentName }}
+    displayName: Test ${{ parameters.environmentName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), ${{ parameters.branchCondition }})
+    jobs:
+      - job: SmokeTest
+        pool:
+          name: azure-data-platform
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: Validate deployed Azure resources
+            inputs:
+              azureSubscription: ${{ parameters.serviceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                az group show --name "${{ parameters.resourceGroupName }}" --output none
+                az resource list --resource-group "${{ parameters.resourceGroupName }}" --output table
+          - bash: ./scripts/cleanup-agent-workspace.sh
+            condition: always()
+            displayName: Clean self-hosted agent workspace
