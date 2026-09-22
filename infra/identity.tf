@@ -89,3 +89,10 @@ resource "databricks_group" "account_readers" {
   provider     = databricks.account
   display_name = azuread_group.dev["readers"].display_name
 }
+
+resource "azurerm_role_assignment" "databricks_firstparty_keyvault" {
+  count                = var.enable_databricks && var.databricks_firstparty_sp_object_id != null ? 1 : 0
+  scope                = azurerm_key_vault.dev.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.databricks_firstparty_sp_object_id
+}

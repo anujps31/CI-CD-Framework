@@ -170,8 +170,46 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
     sku       = "22_04-lts-gen2"
     version   = "latest"
   }
+  lifecycle {
+    ignore_changes = [custom_data]
+  }
 
   tags = local.tags
+}
+
+resource "azurerm_role_assignment" "azdo_runner_contributor" {
+  count                = var.enable_azdo_runner_vm ? 1 : 0
+  scope                = data.azurerm_resource_group.dev.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_linux_virtual_machine.azdo_runner[0].identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "azdo_runner_storage" {
+  count                = var.enable_azdo_runner_vm ? 1 : 0
+  scope                = azurerm_storage_account.dev.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_virtual_machine.azdo_runner[0].identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "azdo_runner_keyvault" {
+  count                = var.enable_azdo_runner_vm ? 1 : 0
+  scope                = azurerm_key_vault.dev.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_linux_virtual_machine.azdo_runner[0].identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "azdo_runner_aks_user" {
+  count                = var.enable_azdo_runner_vm && var.enable_microservices ? 1 : 0
+  scope                = azurerm_kubernetes_cluster.dev[0].id
+  role_definition_name = "Azure Kubernetes Service Cluster User Role"
+  principal_id         = azurerm_linux_virtual_machine.azdo_runner[0].identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "azdo_runner_acr_pull" {
+  count                = var.enable_azdo_runner_vm && var.enable_microservices ? 1 : 0
+  scope                = azurerm_container_registry.dev[0].id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_linux_virtual_machine.azdo_runner[0].identity[0].principal_id
 }
 
 output "resource_group_name" { value = data.azurerm_resource_group.dev.name }

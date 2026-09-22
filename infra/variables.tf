@@ -132,3 +132,8 @@ variable "databricks_allowed_ip_ranges" {
   description = "IP ranges allowed to reach the Databricks workspace UI/API."
   default     = []
 }
+variable "databricks_firstparty_sp_object_id" {
+  type        = string
+  description = "Object ID of the 'AzureDatabricks' first-party service principal in this tenant, used to grant Key Vault access for secret scopes."
+  default     = null
+}

@@ -84,6 +84,16 @@ resource "databricks_ip_access_list" "office_allow" {
   list_type    = "ALLOW"
 }
 
+resource "databricks_secret_scope" "keyvault" {
+  count = var.enable_databricks ? 1 : 0
+  name  = "kv-${local.name_prefix}"
+
+  keyvault_metadata {
+    resource_id = azurerm_key_vault.dev.id
+    dns_name    = azurerm_key_vault.dev.vault_uri
+  }
+}
+
 output "dev_storage_account_name" {
   value = azurerm_storage_account.dev.name
 }
