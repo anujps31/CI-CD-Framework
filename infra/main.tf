@@ -75,7 +75,7 @@ resource "azurerm_container_registry" "dev" {
   # ACR is optional for the microservice profile and is private when enabled.
   # The pipeline enables ACR and AKS only for microservice profiles.
   count                         = var.enable_microservices ? 1 : 0
-  name                          = replace("acr${local.name_prefix}", "-", "")
+  name                          = "acrdataplatformsyrendev01"
   resource_group_name           = data.azurerm_resource_group.dev.name
   location                      = var.location
   sku                           = "Premium"
@@ -93,7 +93,7 @@ resource "azurerm_kubernetes_cluster" "dev" {
   dns_prefix                 = "aks-${replace(local.name_prefix, "-", "-")}"
   sku_tier                   = "Standard"
   private_cluster_enabled    = true
-  dns_prefix_private_cluster = "aks-${replace(local.name_prefix, "-", "")}-private"
+ # dns_prefix_private_cluster = "aks-${replace(local.name_prefix, "-", "")}-private"
   oidc_issuer_enabled        = true
   workload_identity_enabled  = true
   azure_policy_enabled       = true
@@ -127,9 +127,58 @@ resource "azurerm_role_assignment" "adf_key_vault" {
   principal_id         = azurerm_data_factory.dev.identity[0].principal_id
 }
 
+resource "azurerm_network_interface" "azdo_runner" {
+  count               = var.enable_azdo_runner_vm ? 1 : 0
+  name                = "nic-${local.name_prefix}-azdo-runner-01"
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.dev.name
+  tags                = local.tags
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.azdo_runner[0].id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "azdo_runner" {
+  count                           = var.enable_azdo_runner_vm ? 1 : 0
+  name                            = "vm-${local.name_prefix}-azdo-runner-01"
+  location                        = var.location
+  resource_group_name             = data.azurerm_resource_group.dev.name
+  size                            = var.azdo_runner_vm_size
+  admin_username                  = "azureagent"
+  disable_password_authentication = true
+  network_interface_ids           = [azurerm_network_interface.azdo_runner[0].id]
+  custom_data                     = filebase64("${path.module}/../scripts/self-hosted-agent-cloud-init.sh")
+  identity { type = "SystemAssigned" }
+
+  admin_ssh_key {
+    username   = "azureagent"
+    public_key = var.azdo_runner_ssh_public_key
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "StandardSSD_LRS"
+    disk_size_gb         = 64
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
+
+  tags = local.tags
+}
+
 output "resource_group_name" { value = data.azurerm_resource_group.dev.name }
 output "key_vault_name" { value = azurerm_key_vault.dev.name }
 output "adf_name" { value = azurerm_data_factory.dev.name }
 output "databricks_workspace_url" { value = try(azurerm_databricks_workspace.dev[0].workspace_url, null) }
 output "acr_name" { value = try(azurerm_container_registry.dev[0].name, null) }
 output "aks_name" { value = try(azurerm_kubernetes_cluster.dev[0].name, null) }
+output "azdo_runner_vm_name" { value = try(azurerm_linux_virtual_machine.azdo_runner[0].name, null) }
+output "azdo_runner_private_ip" { value = try(azurerm_network_interface.azdo_runner[0].private_ip_address, null) }

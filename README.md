@@ -122,7 +122,7 @@ The pipeline uses an Azure DevOps self-hosted agent pool named `azure-data-platf
 
 | Tool | Minimum | Purpose |
 |---|---:|---|
-| Terraform | 1.7 | Infrastructure |
+| OpenTofu | 1.7 | Infrastructure, Terraform-compatible CLI |
 | Azure CLI | 2.60 | Azure, ARM, ACR, and AKS |
 | Databricks unified CLI | 0.220 | Databricks and DABs |
 | Python | 3.12 | Notebook and service checks |
@@ -130,18 +130,17 @@ The pipeline uses an Azure DevOps self-hosted agent pool named `azure-data-platf
 | Docker | 24 | Container build and validation |
 | kubectl | Current | AKS rollout |
 | SonarQube Scanner | 5+ | Static analysis, code smells, bugs, and coverage gate |
-| Aqua `scannercli` | Approved enterprise version | Aqua code, IaC, and policy scanning |
 | Trivy | 0.50 | Post-image-build filesystem and container vulnerability scan |
 | Gitleaks | 8+ | Secret detection before artifact promotion |
 | tflint | Current | Terraform linting (optional; skipped if not installed) |
 | Checkov | Current | Terraform security policies (optional; skipped if not installed) |
 
-Required platform integrations: SonarQube server, Aqua Security scanner/license and policy
-endpoint, Azure Key Vault for runtime secrets, Azure Monitor/Log Analytics (once enabled —
-see the governance note above), and Microsoft Defender for Cloud.
+Required platform integrations: SonarQube server, Azure Key Vault for runtime secrets,
+Azure Monitor/Log Analytics (once enabled — see the governance note above), and Microsoft
+Defender for Cloud.
 
-The pipeline blocks on SonarQube quality gate, Aqua policy failure, Trivy HIGH/CRITICAL
-findings, Gitleaks findings, Terraform validation, and failed deployment smoke checks.
+The pipeline blocks on SonarQube quality gate, Trivy HIGH/CRITICAL findings, Gitleaks
+findings, Terraform validation, and failed deployment smoke checks.
 
 ## Terraform State Bootstrap
 
@@ -226,7 +225,7 @@ The Azure DevOps stage names are `Unit_Testing`, `Code_Quality`, `Build_Validati
 Install Pipeline Declarative, Multibranch Pipeline, Credentials Binding, Azure Credentials,
 Docker Pipeline, and SonarQube Scanner plugins. The agent must have label
 `azure-data-platform` and must contain Terraform, Azure CLI, Databricks CLI, SonarQube
-`sonar-scanner`, Aqua `scannercli`, Trivy, Gitleaks, kubectl, and Docker.
+`sonar-scanner`, Trivy, Gitleaks, kubectl, and Docker.
 
 Create one Azure credential:
 
@@ -270,7 +269,7 @@ test files are present, records `coverage.xml`, and compiles `notebooks` and
 ### Stage 2: `Code_Quality`
 
 Checks Terraform formatting, runs `tflint`/Checkov when installed, runs SonarQube
-analysis and publishes its quality gate, and runs the Aqua `scannercli` scan. This stage
+analysis and publishes its quality gate, and runs the open-source Trivy scan. This stage
 fails when a mandatory quality or security policy fails.
 
 ### Stage 3: `Build_Validation`

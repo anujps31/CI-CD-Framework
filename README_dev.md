@@ -62,7 +62,7 @@ Use an Azure DevOps self-hosted agent in pool `azure-data-platform`. Install and
 | Tool | Minimum | Used by |
 |---|---:|---|
 | Azure CLI | 2.60 | Azure login and deployment |
-| Terraform | 1.7 | Infrastructure and state |
+| OpenTofu | 1.7 | Infrastructure and state, Terraform-compatible CLI |
 | Databricks unified CLI | 0.220 | Classic notebooks/jobs and DABS |
 | Python | 3.12 | Tests and notebook compilation |
 | Node.js | 18 LTS | CI compatibility |
@@ -70,7 +70,6 @@ Use an Azure DevOps self-hosted agent in pool `azure-data-platform`. Install and
 | kubectl | Current | AKS rollout |
 | Bash | Current | All repository shell scripts |
 | SonarQube scanner | 5+ | Quality gate |
-| Aqua `scannercli` | Approved version | Policy scan |
 | Trivy | 0.50+ | Filesystem and image scans |
 | Gitleaks | 8+ | Secret scan |
 | tflint and Checkov | Current | Optional checks when installed |
@@ -79,16 +78,17 @@ On a Linux agent, check the shell scripts with `bash -n scripts/*.sh`. The Windo
 workstation used to edit this repository does not provide Bash by default; install Git
 Bash or WSL for local script testing. Azure DevOps still requires a Bash-capable agent.
 
-### Optional Terraform-managed build agent VM
+### Optional Terraform-managed Azure DevOps runner VM
 
-The repository includes an opt-in private Ubuntu VM for the Azure DevOps self-hosted
-agent. It is disabled by default because the first Terraform apply must run on an
-already-available bootstrap agent. The VM is created only when these values are supplied:
+The repository includes an opt-in private Ubuntu VM named
+`vm-dataplatform-dev-azdo-runner-01` for all Azure DevOps pipeline scenarios. It is
+disabled by default because the first Terraform apply must run on an already-available
+bootstrap agent. The VM is created only when these values are supplied:
 
 ```hcl
-enable_build_agent_vm      = true
-build_agent_vm_size        = "Standard_D4s_v5"
-build_agent_ssh_public_key = "ssh-ed25519 AAAA..."
+enable_azdo_runner_vm      = true
+azdo_runner_vm_size        = "Standard_D4s_v5"
+azdo_runner_ssh_public_key = "ssh-ed25519 AAAA..."
 ```
 
 Run the first apply from an existing agent with the VM flag and SSH public key. After the
@@ -124,7 +124,7 @@ make the VM cost-free: the VM is billed while running.
 
 For maximum cost savings, stop or deallocate the VM outside deployment windows, or use a
 separate VM Scale Set/ephemeral agent design. Do not delete the VM while an Azure DevOps
-job is running. The optional VM can be removed later with `enable_build_agent_vm = false`
+job is running. The optional VM can be removed later with `enable_azdo_runner_vm = false`
 and a Terraform apply after the agent is removed from the Azure DevOps pool.
 
 ## 4. One-Time Terraform State Bootstrap
@@ -179,7 +179,7 @@ pipeline and authorize the `dev` environment for the deployment stage.
 ### Shared or development variables
 
 The active scope is limited to ADLS, ADF, Databricks, managed identities, and Key Vault.
-Microservices, ACR, AKS, and the optional build-agent VM are disabled for this phase.
+Microservices, ACR, AKS, and the optional Azure DevOps runner VM are disabled for this phase.
 
 Variable names in Azure DevOps use hyphens; Bash receives the corresponding underscore
 form through the task environment.
@@ -247,7 +247,7 @@ kubectl apply --dry-run=client -f microservices/orders-api/k8s/service.yml
 ```
 
 A real deployment also requires the scans configured in the pipeline. Do not bypass the
-SonarQube, Aqua, Trivy, or Gitleaks gates for a shared branch.
+SonarQube, Trivy, or Gitleaks gates for a shared branch.
 
 ## 8. Select a Deployment Profile
 

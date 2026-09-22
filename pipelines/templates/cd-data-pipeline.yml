@@ -35,7 +35,7 @@ stages:
       - deployment: Deploy
         environment: ${{ parameters.environmentName }}
         pool:
-          name: azure-data-platform
+          name: $(selfHostedPool)
         strategy:
           runOnce:
             deploy:

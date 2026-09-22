@@ -136,6 +136,43 @@ resource "azurerm_subnet" "aks" {
   address_prefixes     = ["10.20.20.0/22"]
 }
 
+resource "azurerm_network_security_group" "azdo_runner" {
+  count               = var.enable_azdo_runner_vm ? 1 : 0
+  name                = "nsg-${local.name_prefix}-azdo-runner-01"
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.dev.name
+  tags                = local.tags
+}
+
+resource "azurerm_network_security_rule" "azdo_runner_ssh" {
+  count                       = var.enable_azdo_runner_vm ? 1 : 0
+  name                        = "allow-vnet-ssh"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "22"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = data.azurerm_resource_group.dev.name
+  network_security_group_name = azurerm_network_security_group.azdo_runner[0].name
+}
+
+resource "azurerm_subnet" "azdo_runner" {
+  count                = var.enable_azdo_runner_vm ? 1 : 0
+  name                 = "snet-azdo-runner-01"
+  resource_group_name  = data.azurerm_resource_group.dev.name
+  virtual_network_name = azurerm_virtual_network.dev.name
+  address_prefixes     = ["10.20.24.0/24"]
+}
+
+resource "azurerm_subnet_network_security_group_association" "azdo_runner" {
+  count                     = var.enable_azdo_runner_vm ? 1 : 0
+  subnet_id                 = azurerm_subnet.azdo_runner[0].id
+  network_security_group_id = azurerm_network_security_group.azdo_runner[0].id
+}
+
 resource "azurerm_subnet_network_security_group_association" "databricks_public" {
   subnet_id                 = azurerm_subnet.databricks_public.id
   network_security_group_id = azurerm_network_security_group.databricks.id

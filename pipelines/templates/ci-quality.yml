@@ -1,7 +1,7 @@
 steps:
   - bash: |
       set -euo pipefail
-      # SonarQube, Aqua, tflint, and Checkov must be configured on the agent or service connection.
+      # SonarQube, tflint, Checkov, and Trivy are configured on the open-source agent image.
       # Developer team owns application test cases under tests/.
       if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
         python3 -m pip install -r microservices/orders-api/requirements.txt coverage
@@ -37,13 +37,8 @@ steps:
 
   - bash: |
       set -euo pipefail
-      if command -v scannercli >/dev/null 2>&1; then
-        scannercli scan --local "$(Build.SourcesDirectory)"
-      else
-        echo 'Aqua scannercli is required on the self-hosted agent.' >&2
-        exit 1
-      fi
-    displayName: Aqua code and IaC scan
+      trivy fs --exit-code 1 --severity HIGH,CRITICAL --skip-dirs .git "$(Build.SourcesDirectory)"
+    displayName: Open-source filesystem security scan
 
   - bash: ./scripts/cleanup-agent-workspace.sh
     condition: always()

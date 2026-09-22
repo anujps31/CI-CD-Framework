@@ -102,6 +102,22 @@ variable "enable_microservices" {
   # Set true for FULL_PLATFORM or MICROSERVICES_ONLY profiles.
   default = false
 }
+variable "enable_azdo_runner_vm" {
+  type        = bool
+  description = "Create the private Ubuntu VM used by all Azure DevOps pipeline scenarios."
+  default     = false
+}
+variable "azdo_runner_vm_size" {
+  type        = string
+  description = "Azure VM size for the Azure DevOps runner."
+  default     = "Standard_D4s_v5"
+}
+variable "azdo_runner_ssh_public_key" {
+  type        = string
+  description = "SSH public key used to access the private Azure DevOps runner VM."
+  default     = null
+  sensitive   = true
+}
 variable "enable_unity_catalog" {
   type        = bool
   description = "Provision Unity Catalog metastore, catalog, schemas, and grants. Requires workspace API reachability."

@@ -49,7 +49,7 @@ pipeline {
         withSonarQubeEnv('sonarqube-server') {
           sh 'sonar-scanner -Dsonar.projectKey=dataplatform-cicd-framework -Dsonar.sources=. -Dsonar.coverageReportPaths=coverage.xml'
         }
-        sh 'scannercli scan --local .'
+        sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL --skip-dirs .git .'
       }
     }
 

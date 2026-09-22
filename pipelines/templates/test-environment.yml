@@ -24,7 +24,7 @@ stages:
     jobs:
       - job: SmokeTest
         pool:
-          name: azure-data-platform
+          name: $(selfHostedPool)
         steps:
           - checkout: self
           - task: AzureCLI@2

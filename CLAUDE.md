@@ -182,7 +182,7 @@ concurrently (the state backend locks, but the pipeline also serializes `Deploy_
 - Secrets (Databricks client secret, etc.) flow in only via Azure DevOps variable
   group secrets / Jenkins credentials / env vars (`TF_VAR_databricks_client_secret`, ...) —
   never hardcode them into `.tfvars` or scripts.
-- The pipeline hard-blocks on SonarQube quality gate, Aqua policy, Trivy HIGH/CRITICAL,
+- The pipeline hard-blocks on SonarQube quality gate, Trivy HIGH/CRITICAL,
   Gitleaks findings, Terraform validation, and deployment smoke checks — don't add
   `--no-verify`-style bypasses to get a change through.
 
