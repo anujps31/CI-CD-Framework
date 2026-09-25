@@ -69,7 +69,18 @@ stages:
                       test -n "$(ARM-SUBSCRIPTION-ID)" || { echo 'ARM-SUBSCRIPTION-ID is required'; exit 1; }
                       # The selected environment has its own backend state and tfvars file.
                       terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" init -backend-config="environments/${{ parameters.environmentName }}/backend.tfvars" -input=false
-                      terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" plan -var-file="environments/${{ parameters.environmentName }}/${{ parameters.environmentName }}.tfvars" -var="enable_databricks=${{ not(or(eq(parameters.deploymentProfile, 'ADF_ONLY'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY'))) }}" -var="enable_microservices=${{ or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY')) }}" -out=tfplan -input=false
+                                            # Which infrastructure exists is decided by the tfvars files, not the deployment
+                      # profile: the profile only selects which workloads are deployed below. Driving
+                      # enable_* flags from the profile would destroy resources that other profiles use.
+                      terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" plan -var-file="environments/${{ parameters.environmentName }}/${{ parameters.environmentName }}.tfvars" -out=tfplan -input=false
+                      # Safety gate: never delete or replace resources from the pipeline. Intentional
+                      # removals are reviewed and applied by a person from a workstation.
+                      deletes="$(terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" show -json tfplan | jq -r '[.resource_changes[]? | select(.change.actions | index("delete")) | .address] | .[]')"
+                      if [[ -n "$deletes" ]]; then
+                        echo "##vso[task.logissue type=error]Terraform plan would delete or replace these resources; apply blocked:"
+                        printf '  %s\n' $deletes
+                        exit 1
+                      fi
                       terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" apply -auto-approve -input=false tfplan
                       if [[ "${{ not(or(eq(parameters.deploymentProfile, 'ADF_ONLY'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY'))) }}" == "True" ]]; then
                         workspace_host="$(terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" output -raw databricks_workspace_url 2>/dev/null || true)"
