@@ -45,7 +45,7 @@ pipeline {
         sh 'terraform -chdir=infra init -backend=false -input=false'
         sh 'terraform -chdir=infra validate'
         sh 'if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi'
-        sh 'if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet; fi'
+        sh 'if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet --config-file .checkov.yaml; fi'
         withSonarQubeEnv('sonarqube-server') {
           sh 'sonar-scanner -Dsonar.projectKey=dataplatform-cicd-framework -Dsonar.sources=. -Dsonar.coverageReportPaths=coverage.xml'
         }

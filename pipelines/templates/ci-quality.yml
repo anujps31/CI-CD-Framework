@@ -21,7 +21,7 @@ steps:
       set -euo pipefail
       terraform fmt -check -recursive infra
       if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi
-      if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet; fi
+      if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet --config-file .checkov.yaml; fi
     displayName: Code quality and IaC validation
 
   # Excluded from the run entirely when off, so the pipeline works before the

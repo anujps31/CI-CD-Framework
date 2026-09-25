@@ -1,0 +1,34 @@
+# Checkov checks accepted as known risks for this dev-only framework.
+# Review this list before promoting the framework beyond dev. Remove an entry once
+# the matching control is implemented, and Checkov will enforce it from then on.
+skip-check:
+  # Storage (ADLS Gen2)
+  - CKV_AZURE_206   # LRS replication is acceptable for dev data.
+  - CKV_AZURE_33    # Queue logging: queues are not used, and it requires shared keys (disabled).
+  - CKV2_AZURE_1    # Customer-managed keys: platform-managed + infrastructure encryption for dev.
+  # Data Factory
+  - CKV_AZURE_103   # ADF Git integration: ADF is deployed from Azure Repos by this pipeline instead.
+  - CKV2_AZURE_15   # Customer-managed keys: not required for dev.
+  # Databricks
+  - CKV_AZURE_158   # Public UI access is intentional and restricted by the workspace IP access list.
+  - CKV2_AZURE_48   # Customer-managed keys for DBFS: not required for dev.
+  # Container Registry (microservices profile only)
+  - CKV_AZURE_237   # Dedicated data endpoints: private endpoint already in place.
+  - CKV_AZURE_167   # Untagged manifest retention: low volume in dev.
+  - CKV_AZURE_164   # Content trust / signed images: not adopted yet.
+  - CKV_AZURE_166   # Image quarantine: not adopted yet; Trivy image scan runs in the pipeline.
+  - CKV_AZURE_233   # Zone redundancy: not needed for dev.
+  - CKV_AZURE_165   # Geo-replication: single region.
+  # AKS (microservices profile only)
+  - CKV_AZURE_226   # Ephemeral OS disks: not supported by the dev node size.
+  - CKV_AZURE_171   # Auto-upgrade channel: upgrades are manual in dev.
+  - CKV_AZURE_4     # Azure Monitor logging: no Log Analytics workspace in dev.
+  - CKV_AZURE_141   # Local admin disabled: needs Entra ID integration, not configured yet.
+  - CKV_AZURE_117   # Disk encryption set (CMK): not required for dev.
+  - CKV_AZURE_168   # Max pods >= 50: default is sufficient for a one-node dev cluster.
+  - CKV_AZURE_172   # Secrets Store CSI auto-rotation: CSI driver not used.
+  - CKV_AZURE_232   # System-node taints: single node pool in dev.
+  - CKV_AZURE_227   # Host-based encryption: requires a subscription feature flag.
+  # Runner VM and networking
+  - CKV_AZURE_50    # VM extensions: the runner uses cloud-init; flagged generically.
+  - CKV2_AZURE_31   # Subnet NSG: runner subnet has an NSG via a separate association resource; AKS subnet uses AKS-managed rules.
