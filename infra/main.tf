@@ -108,12 +108,18 @@ resource "azurerm_kubernetes_cluster" "dev" {
     node_count     = 1
     vm_size        = "Standard_D2s_v5"
     vnet_subnet_id = azurerm_subnet.aks[0].id
+
+    # Matches what Azure already applied, so Terraform doesn't try to clear it.
+    upgrade_settings {
+      max_surge                     = "10%"
+      drain_timeout_in_minutes      = 0
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   identity { type = "SystemAssigned" }
   tags = local.tags
 }
-
 resource "azurerm_role_assignment" "aks_acr_pull" {
   count                = var.enable_microservices ? 1 : 0
   scope                = azurerm_container_registry.dev[0].id
@@ -142,14 +148,15 @@ resource "azurerm_network_interface" "azdo_runner" {
 }
 
 resource "azurerm_linux_virtual_machine" "azdo_runner" {
-  count                           = var.enable_azdo_runner_vm ? 1 : 0
-  name                            = "vm-${local.name_prefix}-azdo-runner-01"
-  location                        = var.location
-  resource_group_name             = data.azurerm_resource_group.dev.name
-  size                            = var.azdo_runner_vm_size
-  admin_username                  = "azureagent"
-  disable_password_authentication = true
-  network_interface_ids           = [azurerm_network_interface.azdo_runner[0].id]
+  count                             = var.enable_azdo_runner_vm ? 1 : 0
+  name                              = "vm-${local.name_prefix}-azdo-runner-01"
+  location                          = var.location
+  resource_group_name               = data.azurerm_resource_group.dev.name
+  size                              = var.azdo_runner_vm_size
+  admin_username                    = "azureagent"
+  disable_password_authentication   = true
+  vm_agent_platform_updates_enabled = true
+  network_interface_ids             = [azurerm_network_interface.azdo_runner[0].id]
   # The registration script is embedded into cloud-init so a rebuilt VM registers itself.
   # Carriage returns are stripped so a checkout with Windows line endings still boots.
   custom_data = base64encode(replace(replace(

@@ -97,32 +97,48 @@ stages:
                     TF_VAR_databricks_client_id: $(DATABRICKS-CLIENT-ID)
                     TF_VAR_databricks_client_secret: $(DATABRICKS-CLIENT-SECRET)
                   displayName: Terraform apply
+                # ADF and Databricks steps run inside AzureCLI@2 so they are signed in as the
+                # service connection. Databricks uses that same Azure CLI login (azure-cli auth);
+                # the identity has Contributor on the workspace, which makes it a workspace admin.
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS'), eq(parameters.deploymentProfile, 'ADF_ONLY')) }}:
-                  - bash: |
-                      set -euo pipefail
-                      ./scripts/deploy-adf.sh "${{ parameters.environmentName }}" "$(RESOURCE_GROUP_NAME)" "$(Pipeline.Workspace)/build-artifact/adf"
+                  - task: AzureCLI@2
                     displayName: Deploy ADF ARM artifact
-                    env:
-                      AZURE_DEVOPS_EXT_AZURE_RM_SERVICE_PRINCIPAL_KEY: $(ARM-CLIENT-ID)
+                    inputs:
+                      azureSubscription: ${{ parameters.serviceConnection }}
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      workingDirectory: $(Build.SourcesDirectory)
+                      inlineScript: |
+                        set -euo pipefail
+                        ./scripts/deploy-adf.sh "${{ parameters.environmentName }}" "$(RESOURCE-GROUP-NAME)" "$(Pipeline.Workspace)/build-artifact/adf"
                 - ${{ if eq(parameters.deploymentProfile, 'DATABRICKS_DABS') }}:
-                  - bash: |
-                      set -euo pipefail
-                      export DATABRICKS_HOST="$(DATABRICKS-HOST)"
-                      export DATABRICKS_BUNDLE_VAR_workspace_host="$(DATABRICKS-HOST)"
-                      export DATABRICKS_CLIENT_ID="$(DATABRICKS-CLIENT-ID)"
-                      export DATABRICKS_CLIENT_SECRET="$(DATABRICKS-CLIENT-SECRET)"
-                      databricks bundle validate -t "${{ parameters.environmentName }}"
-                      databricks bundle deploy -t "${{ parameters.environmentName }}"
-                    workingDirectory: $(Pipeline.Workspace)/build-artifact/dabs
+                  - task: AzureCLI@2
                     displayName: Deploy Databricks Asset Bundle
+                    inputs:
+                      azureSubscription: ${{ parameters.serviceConnection }}
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      workingDirectory: $(Pipeline.Workspace)/build-artifact/dabs
+                      inlineScript: |
+                        set -euo pipefail
+                        export DATABRICKS_HOST="$(DATABRICKS-HOST)"
+                        export DATABRICKS_AUTH_TYPE=azure-cli
+                        export DATABRICKS_BUNDLE_VAR_workspace_host="$(DATABRICKS-HOST)"
+                        databricks bundle validate -t "${{ parameters.environmentName }}"
+                        databricks bundle deploy -t "${{ parameters.environmentName }}"
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS')) }}:
-                  - bash: |
-                      set -euo pipefail
-                      export DATABRICKS_HOST="$(DATABRICKS-HOST)"
-                      export DATABRICKS_CLIENT_ID="$(DATABRICKS-CLIENT-ID)"
-                      export DATABRICKS_CLIENT_SECRET="$(DATABRICKS-CLIENT-SECRET)"
-                      ./scripts/deploy-databricks.sh "${{ parameters.environmentName }}" "$(Pipeline.Workspace)/build-artifact"
+                  - task: AzureCLI@2
                     displayName: Deploy Databricks notebooks and jobs
+                    inputs:
+                      azureSubscription: ${{ parameters.serviceConnection }}
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      workingDirectory: $(Build.SourcesDirectory)
+                      inlineScript: |
+                        set -euo pipefail
+                        export DATABRICKS_HOST="$(DATABRICKS-HOST)"
+                        export DATABRICKS_AUTH_TYPE=azure-cli
+                        ./scripts/deploy-databricks.sh "${{ parameters.environmentName }}" "$(Pipeline.Workspace)/build-artifact"
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY')) }}:
                   - bash: |
                       set -euo pipefail
