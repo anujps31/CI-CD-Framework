@@ -150,7 +150,13 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
   admin_username                  = "azureagent"
   disable_password_authentication = true
   network_interface_ids           = [azurerm_network_interface.azdo_runner[0].id]
-  custom_data                     = filebase64("${path.module}/../scripts/self-hosted-agent-cloud-init.sh")
+    # The registration script is embedded into cloud-init so a rebuilt VM registers itself.
+  # Carriage returns are stripped so a checkout with Windows line endings still boots.
+  custom_data = base64encode(replace(replace(
+    file("${path.module}/../scripts/self-hosted-agent-cloud-init.sh"),
+    "__REGISTER_SCRIPT__",
+    trimspace(file("${path.module}/../scripts/register-self-hosted-agent.sh"))
+  ), "\r", ""))
   identity { type = "SystemAssigned" }
 
   admin_ssh_key {
@@ -174,7 +180,13 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
     ignore_changes = [custom_data]
   }
 
-  tags = local.tags
+    # Read by register-self-hosted-agent.sh through the Instance Metadata Service.
+  tags = merge(local.tags, {
+    "azdo-org-url"    = var.azdo_org_url
+    "azdo-pool"       = var.azdo_agent_pool
+    "azdo-key-vault"  = azurerm_key_vault.dev.name
+    "azdo-pat-secret" = var.azdo_agent_pat_secret_name
+  })
 }
 
 resource "azurerm_role_assignment" "azdo_runner_contributor" {

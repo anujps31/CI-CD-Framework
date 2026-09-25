@@ -85,4 +85,37 @@ cat >/etc/profile.d/azdo-agent-tools.sh <<'PROFILE'
 export PATH="/usr/local/bin:$PATH"
 PROFILE
 
-printf '%s\n' 'Azure DevOps runner tools installed. Register the agent separately with scripts/register-self-hosted-agent.sh.' >/var/log/azdo-runner-bootstrap.log
+# Agent self-registration. Terraform replaces the placeholder below with the contents of
+# scripts/register-self-hosted-agent.sh. The boot service retries every 2 minutes until
+# registration succeeds (for example, while the PAT is not yet in Key Vault), then stops
+# running because .credentials exists. After that the agent's own systemd service starts
+# it on every reboot.
+cat >/usr/local/bin/azdo-agent-register <<'REGISTER_SCRIPT'
+__REGISTER_SCRIPT__
+REGISTER_SCRIPT
+chmod 0755 /usr/local/bin/azdo-agent-register
+
+cat >/etc/systemd/system/azdo-agent-register.service <<'UNIT'
+[Unit]
+Description=Register the Azure DevOps agent (runs until registration succeeds)
+Wants=network-online.target
+After=network-online.target docker.service
+ConditionPathExists=!/opt/azdo-agent/.credentials
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/azdo-agent-register
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable azdo-agent-register.service
+# --no-block: starting a unit ordered after network-online from inside cloud-init can
+# otherwise wait on the boot transaction that cloud-init itself is part of.
+systemctl start --no-block azdo-agent-register.service
+
+printf '%s\n' 'Azure DevOps runner tools installed; agent registration handled by azdo-agent-register.service.' >/var/log/azdo-runner-bootstrap.log

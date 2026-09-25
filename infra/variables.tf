@@ -137,3 +137,21 @@ variable "databricks_firstparty_sp_object_id" {
   description = "Object ID of the 'AzureDatabricks' first-party service principal in this tenant, used to grant Key Vault access for secret scopes."
   default     = null
 }
+
+variable "azdo_org_url" {
+  type        = string
+  description = "Azure DevOps organization URL the runner agent registers with."
+  default     = "https://dev.azure.com/syrentechnologies"
+}
+
+variable "azdo_agent_pool" {
+  type        = string
+  description = "Azure DevOps agent pool the runner joins. Must match selfHostedPool in azure-pipelines.yml."
+  default     = "azure-data-platform"
+}
+
+variable "azdo_agent_pat_secret_name" {
+  type        = string
+  description = "Key Vault secret holding the PAT used only for first-time agent registration."
+  default     = "azdo-agent-pat"
+}
