@@ -86,17 +86,17 @@ resource "azurerm_container_registry" "dev" {
 
 resource "azurerm_kubernetes_cluster" "dev" {
   # AKS is optional, private, and attached to the dedicated Dev VNet subnet.
-  count                      = var.enable_microservices ? 1 : 0
-  name                       = "aks-${local.name_prefix}"
-  location                   = var.location
-  resource_group_name        = data.azurerm_resource_group.dev.name
-  dns_prefix                 = "aks-${replace(local.name_prefix, "-", "-")}"
-  sku_tier                   = "Standard"
-  private_cluster_enabled    = true
- # dns_prefix_private_cluster = "aks-${replace(local.name_prefix, "-", "")}-private"
-  oidc_issuer_enabled        = true
-  workload_identity_enabled  = true
-  azure_policy_enabled       = true
+  count                   = var.enable_microservices ? 1 : 0
+  name                    = "aks-${local.name_prefix}"
+  location                = var.location
+  resource_group_name     = data.azurerm_resource_group.dev.name
+  dns_prefix              = "aks-${replace(local.name_prefix, "-", "-")}"
+  sku_tier                = "Standard"
+  private_cluster_enabled = true
+  # dns_prefix_private_cluster = "aks-${replace(local.name_prefix, "-", "")}-private"
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
+  azure_policy_enabled      = true
   network_profile {
     network_plugin    = "azure"
     network_policy    = "azure"
@@ -150,7 +150,7 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
   admin_username                  = "azureagent"
   disable_password_authentication = true
   network_interface_ids           = [azurerm_network_interface.azdo_runner[0].id]
-    # The registration script is embedded into cloud-init so a rebuilt VM registers itself.
+  # The registration script is embedded into cloud-init so a rebuilt VM registers itself.
   # Carriage returns are stripped so a checkout with Windows line endings still boots.
   custom_data = base64encode(replace(replace(
     file("${path.module}/../scripts/self-hosted-agent-cloud-init.sh"),
@@ -180,7 +180,7 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
     ignore_changes = [custom_data]
   }
 
-    # Read by register-self-hosted-agent.sh through the Instance Metadata Service.
+  # Read by register-self-hosted-agent.sh through the Instance Metadata Service.
   tags = merge(local.tags, {
     "azdo-org-url"    = var.azdo_org_url
     "azdo-pool"       = var.azdo_agent_pool

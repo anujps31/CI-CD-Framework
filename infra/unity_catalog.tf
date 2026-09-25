@@ -51,14 +51,14 @@ resource "databricks_catalog" "dev" {
 }
 
 resource "databricks_schema" "raw" {
-  count = var.enable_databricks && var.enable_unity_catalog ? 1 : 0
+  count        = var.enable_databricks && var.enable_unity_catalog ? 1 : 0
   catalog_name = databricks_catalog.dev[0].name
   name         = "raw"
   comment      = "Raw Dev data."
 }
 
 resource "databricks_schema" "silver" {
-  count = var.enable_databricks && var.enable_unity_catalog ? 1 : 0
+  count        = var.enable_databricks && var.enable_unity_catalog ? 1 : 0
   catalog_name = databricks_catalog.dev[0].name
   name         = "silver"
   comment      = "Curated Dev data."

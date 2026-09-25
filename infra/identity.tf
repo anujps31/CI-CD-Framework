@@ -19,24 +19,24 @@ resource "azuread_user" "dev" {
 locals {
   # Membership keys make later additions and removals predictable and non-destructive.
   dev_group_members = {
-  platform-admins = var.dev_admin_object_ids
-  data-engineers  = setunion(
-    var.dev_data_engineer_object_ids,
-    length(var.dev_user_definitions) > 0 ? toset([for user in azuread_user.dev : user.object_id]) : toset([])
-  )
-  readers = lookup(var.dev_group_members, "readers", [])
-}
+    platform-admins = var.dev_admin_object_ids
+    data-engineers = setunion(
+      var.dev_data_engineer_object_ids,
+      length(var.dev_user_definitions) > 0 ? toset([for user in azuread_user.dev : user.object_id]) : toset([])
+    )
+    readers = lookup(var.dev_group_members, "readers", [])
+  }
   dev_memberships = {
-  for membership in flatten([
-    for group_name, member_ids in local.dev_group_members : [
-      for member_id in member_ids : {
-        key       = "${group_name}-${nonsensitive(member_id)}"
-        group     = group_name
-        member_id = member_id
-      }
-    ]
-  ]) : membership.key => membership
-}
+    for membership in flatten([
+      for group_name, member_ids in local.dev_group_members : [
+        for member_id in member_ids : {
+          key       = "${group_name}-${nonsensitive(member_id)}"
+          group     = group_name
+          member_id = member_id
+        }
+      ]
+    ]) : membership.key => membership
+  }
 }
 
 resource "azuread_group_member" "dev" {
@@ -47,7 +47,7 @@ resource "azuread_group_member" "dev" {
 }
 
 resource "azurerm_role_assignment" "dev_platform_admins" {
-    count                = var.manage_access_control ? 1 : 0
+  count = var.manage_access_control ? 1 : 0
   # Platform administrators receive the Dev resource-group role through group membership.
   scope                = data.azurerm_resource_group.dev.id
   role_definition_name = "Contributor"
@@ -69,12 +69,12 @@ resource "azurerm_role_assignment" "dev_data_engineers_storage" {
 }
 
 resource "databricks_group" "dev_data_engineers" {
-  count = var.enable_databricks && var.manage_access_control && var.enable_unity_catalog ? 1 : 0
+  count        = var.enable_databricks && var.manage_access_control && var.enable_unity_catalog ? 1 : 0
   display_name = azuread_group.dev["data-engineers"].display_name
 }
 
 resource "databricks_group" "dev_readers" {
-  count = var.enable_databricks && var.manage_access_control && var.enable_unity_catalog ? 1 : 0
+  count        = var.enable_databricks && var.manage_access_control && var.enable_unity_catalog ? 1 : 0
   display_name = azuread_group.dev["readers"].display_name
 }
 
