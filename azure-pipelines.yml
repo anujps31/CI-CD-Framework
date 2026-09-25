@@ -96,7 +96,7 @@ stages:
     parameters:
       environmentName: dev
       # These names must match the Azure DevOps service connection and variable group.
-      serviceConnection: svc-conn-dataplatform-dev
+      serviceConnection: svc-dataplatform-dev
       variableGroup: vg-dataplatform-dev
       projectName: ${{ parameters.projectName }}
       deploymentProfile: ${{ parameters.deploymentProfile }}
@@ -105,7 +105,7 @@ stages:
   - template: pipelines/templates/test-environment.yml
     parameters:
       environmentName: dev
-      serviceConnection: svc-conn-dataplatform-dev
+      serviceConnection: svc-dataplatform-dev
       resourceGroupName: NA_ResourceRG
       dependsOn: Deploy_dev
       branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"

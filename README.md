@@ -105,7 +105,7 @@ export is valid and no Databricks or AKS deployment is needed.
    `infra/environments/dev/backend.tfvars`.
 4. A Databricks account service principal with account-level permission to create or
    manage the Unity Catalog metastore and workspace assignment.
-5. Azure DevOps service connection `svc-conn-dataplatform-dev`, variable group
+5. Azure DevOps service connection `svc-dataplatform-dev`, variable group
    `vg-dataplatform-dev`, and environment `dev`. (Or, for Jenkins, credential
    `azure-sp-dataplatform-dev`.)
 6. A VNet-capable Azure region and subscription quota for private endpoints, AKS, and
@@ -168,7 +168,7 @@ storage account name changes, update that file.
 Create one Azure Resource Manager connection using **Workload Identity Federation**:
 
 ```text
-svc-conn-dataplatform-dev
+svc-dataplatform-dev
 ```
 
 Permissions: `Contributor` on `NA_ResourceRG`, `Storage Blob Data Contributor` on the
@@ -518,7 +518,7 @@ Do this deliberately and test it in a sandbox before pointing it at anything sha
 [ ] Azure subscription d5691146-731e-4c08-92d4-b0b2703db592 is available.
 [ ] NA_ResourceRG exists and the deployment identity has the required roles.
 [ ] Terraform state resource group, storage account, and container exist.
-[ ] svc-conn-dataplatform-dev (or azure-sp-dataplatform-dev for Jenkins) exists.
+[ ] svc-dataplatform-dev (or azure-sp-dataplatform-dev for Jenkins) exists.
 [ ] vg-dataplatform-shared and vg-dataplatform-dev are configured.
 [ ] ADF ARM files are real project publish exports (or ADF_ONLY/ADF_DATABRICKS is skipped).
 [ ] Databricks workspace URL and service principal are configured.

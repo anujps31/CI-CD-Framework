@@ -167,7 +167,7 @@ Never put a storage account key in source control or a pipeline variable.
 
 Create these objects exactly:
 
-- Service connection: `svc-conn-dataplatform-dev`
+- Service connection: `svc-dataplatform-dev`
 - Variable group: `vg-dataplatform-shared`
 - Variable group: `vg-dataplatform-dev`
 - Agent pool: `azure-data-platform`
