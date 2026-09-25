@@ -30,6 +30,9 @@ vm_tag() {
 
 start_agent_service() {
   cd "$agent_root"
+  # UsePythonVersion/UseNode download builds that are compiled for /opt/hostedtoolcache.
+  install -d -o "$agent_user" -g "$agent_user" /opt/hostedtoolcache
+  grep -q '^AGENT_TOOLSDIRECTORY=' .env 2>/dev/null || echo 'AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache' >>.env
   # svc.sh writes .service after installing the systemd unit; install only once.
   [[ -f .service ]] || ./svc.sh install "$agent_user"
   ./svc.sh start
