@@ -30,6 +30,9 @@ steps:
       set -euo pipefail
       mkdir -p "$(Build.ArtifactStagingDirectory)/artifact"
       cp -R infra adf notebooks dabs microservices projects scripts "$(Build.ArtifactStagingDirectory)/artifact/"
+      # Provider binaries lose their execute permission inside pipeline artifacts, so the
+      # deploy stage downloads its own. The lock file stays, so both stages use the same versions.
+      rm -rf "$(Build.ArtifactStagingDirectory)/artifact/infra/.terraform"
       printf '%s\n' "$(Build.SourceVersion)" > "$(Build.ArtifactStagingDirectory)/artifact/build-id.txt"
     displayName: Assemble immutable artifact
 
