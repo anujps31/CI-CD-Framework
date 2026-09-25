@@ -12,7 +12,7 @@ parameters:
     type: string
   - name: deploymentProfile
     type: string
-    # Controls Terraform flags and component deployment steps below.
+    # Selects which workloads are deployed below; infrastructure comes from the tfvars files.
   - name: dependsOn
     type: string
     default: Build
@@ -63,13 +63,22 @@ stages:
                     azureSubscription: ${{ parameters.serviceConnection }}
                     scriptType: bash
                     scriptLocation: inlineScript
+                    # Exposes the service connection's federated token as $idToken for Terraform.
+                    addSpnToEnvironment: true
                     inlineScript: |
                       set -euo pipefail
-                      # ARM-SUBSCRIPTION-ID, ARM-TENANT-ID, and ARM-CLIENT-ID come from the variable groups.
+                      # Terraform's azurerm backend and provider cannot reuse an Azure CLI login that
+                      # belongs to a service principal, so they sign in with the same workload identity
+                      # federation token (OIDC). No client secret is involved.
+                      export ARM_USE_OIDC=true
+                      export ARM_OIDC_TOKEN="$idToken"
+                      export ARM_CLIENT_ID="$servicePrincipalId"
+                      export ARM_TENANT_ID="$tenantId"
+                      # ARM-SUBSCRIPTION-ID comes from the variable group.
                       test -n "$(ARM-SUBSCRIPTION-ID)" || { echo 'ARM-SUBSCRIPTION-ID is required'; exit 1; }
                       # The selected environment has its own backend state and tfvars file.
                       terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" init -backend-config="environments/${{ parameters.environmentName }}/backend.tfvars" -input=false
-                                            # Which infrastructure exists is decided by the tfvars files, not the deployment
+                      # Which infrastructure exists is decided by the tfvars files, not the deployment
                       # profile: the profile only selects which workloads are deployed below. Driving
                       # enable_* flags from the profile would destroy resources that other profiles use.
                       terraform -chdir="$(Pipeline.Workspace)/build-artifact/infra" plan -var-file="environments/${{ parameters.environmentName }}/${{ parameters.environmentName }}.tfvars" -out=tfplan -input=false
@@ -140,14 +149,25 @@ stages:
                         export DATABRICKS_AUTH_TYPE=azure-cli
                         ./scripts/deploy-databricks.sh "${{ parameters.environmentName }}" "$(Pipeline.Workspace)/build-artifact"
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY')) }}:
-                  - bash: |
-                      set -euo pipefail
-                      ./scripts/deploy-microservice.sh "${{ parameters.environmentName }}" "$(RESOURCE_GROUP_NAME)" "$(ACR-NAME)" "$(AKS-NAME)" "$(Pipeline.Workspace)/build-artifact"
+                  - task: AzureCLI@2
                     displayName: Build and deploy microservice to AKS
-                - bash: |
-                    set -euo pipefail
-                    az resource list --resource-group "$(RESOURCE_GROUP_NAME)" --output table
+                    inputs:
+                      azureSubscription: ${{ parameters.serviceConnection }}
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      workingDirectory: $(Build.SourcesDirectory)
+                      inlineScript: |
+                        set -euo pipefail
+                        ./scripts/deploy-microservice.sh "${{ parameters.environmentName }}" "$(RESOURCE-GROUP-NAME)" "$(ACR-NAME)" "$(AKS-NAME)" "$(Pipeline.Workspace)/build-artifact"
+                - task: AzureCLI@2
                   displayName: Post-deployment validation
+                  inputs:
+                    azureSubscription: ${{ parameters.serviceConnection }}
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      az resource list --resource-group "$(RESOURCE-GROUP-NAME)" --output table
                 - bash: ./scripts/cleanup-agent-workspace.sh
                   condition: always()
                   displayName: Clean self-hosted agent workspace
