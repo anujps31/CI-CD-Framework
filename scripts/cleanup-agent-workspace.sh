@@ -12,5 +12,6 @@ fi
 
 rm -rf "${HOME:-/home/azureagent}/.cache/pip" "${HOME:-/home/azureagent}/.npm/_cacache"
 if command -v docker >/dev/null 2>&1; then
-  docker system prune --all --force --volumes || true
+  # Labelled resources (SonarQube and its database) are long-lived and never pruned.
+  docker system prune --all --force --volumes --filter "label!=com.dataplatform.keep=true" || true
 fi
