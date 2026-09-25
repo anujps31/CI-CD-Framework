@@ -1,3 +1,8 @@
+parameters:
+  - name: enableSonarQube
+    type: boolean
+    default: true
+
 steps:
   - bash: |
       set -euo pipefail
@@ -19,21 +24,24 @@ steps:
       if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet; fi
     displayName: Code quality and IaC validation
 
-  - task: SonarQubePrepare@7
-    displayName: Prepare SonarQube analysis
-    inputs:
-      # This name must match the Azure DevOps SonarQube service connection.
-      SonarQube: sonarqube-service-connection
-      scannerMode: cli
-      configMode: file
+  # Excluded from the run entirely when off, so the pipeline works before the
+  # SonarQube extension is installed in the organization.
+  - ${{ if eq(parameters.enableSonarQube, true) }}:
+      - task: SonarQubePrepare@7
+        displayName: Prepare SonarQube analysis
+        inputs:
+          # This name must match the Azure DevOps SonarQube service connection.
+          SonarQube: sonarqube-service-connection
+          scannerMode: cli
+          configMode: file
 
-  - task: SonarQubeAnalyze@7
-    displayName: SonarQube code quality and coverage
+      - task: SonarQubeAnalyze@7
+        displayName: SonarQube code quality and coverage
 
-  - task: SonarQubePublish@7
-    displayName: Publish SonarQube quality gate
-    inputs:
-      pollingTimeoutSec: '300'
+      - task: SonarQubePublish@7
+        displayName: Publish SonarQube quality gate
+        inputs:
+          pollingTimeoutSec: '300'
 
   - bash: |
       set -euo pipefail

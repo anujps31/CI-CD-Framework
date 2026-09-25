@@ -31,6 +31,10 @@ parameters:
     # Select one profile; this controls which components are deployed.
     default: ADF_DATABRICKS
     values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY]
+  - name: runSonarQube
+    type: boolean
+    # Turn on once the SonarQube extension and sonarqube-service-connection exist.
+    default: false
 
 variables:
   # Create this variable group in Azure DevOps before running the pipeline.
@@ -62,6 +66,8 @@ stages:
         steps:
           - checkout: self
           - template: pipelines/templates/ci-quality.yml
+            parameters:
+              enableSonarQube: ${{ parameters.runSonarQube }}
 
   - stage: Build_Validation
     displayName: Build and Validation
