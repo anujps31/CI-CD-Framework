@@ -16,6 +16,8 @@ trigger:
       - projects/**
       - tests/**
       - azure-pipelines.yml
+      - notebooks/**
+      - databricks/**
     exclude:
       - pipelines/infra-pipeline.yml
       - scripts/infra-plan.sh
@@ -30,6 +32,7 @@ pr:
     include:
       - adf/**
       - notebooks/**
+      - databricks/**
       - dabs/**
       - microservices/**
       - pipelines/**
@@ -37,6 +40,7 @@ pr:
       - projects/**
       - tests/**
       - azure-pipelines.yml
+      
     exclude:
       - pipelines/infra-pipeline.yml
       - scripts/infra-plan.sh

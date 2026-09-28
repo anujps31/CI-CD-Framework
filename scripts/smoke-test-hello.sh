@@ -4,6 +4,7 @@
 # the service connection, on the self-hosted agent inside the VNet.
 #   smoke-test-hello.sh adls <storage-account>
 #   smoke-test-hello.sh adf  <resource-group> <factory-name>
+#   smoke-test-hello.sh databricks <job-name>     (needs DATABRICKS_HOST; run after the adls test)
 set -euo pipefail
 
 build_id="${BUILD_BUILDID:-local}"
@@ -58,8 +59,37 @@ test_adf() {
   pass "ADF pl_hello_world run ${run_id} Succeeded with output '${value}'"
 }
 
+test_databricks() {
+  local job_name="${1:?job name is required}"
+  local job_id run task_run_id result message read_build rows
+  : "${DATABRICKS_HOST:?DATABRICKS_HOST is required}"
+
+  job_id="$(databricks jobs list --name "$job_name" -o json \
+    | jq -r 'if type == "array" then . else (.jobs // []) end | .[0].job_id // empty')"
+  [[ -n "$job_id" ]] || fail "Databricks job ${job_name} not found; did the deploy step create it?"
+
+  echo "Running ${job_name} (${job_id}); starting a single-node cluster takes a few minutes..."
+  # run-now waits for the run to finish and fails if the run fails.
+  run="$(databricks jobs run-now "$job_id" --timeout 30m -o json)" \
+    || fail "Databricks job ${job_name} run failed; open the run in the workspace (Workflows) for the notebook error"
+  [[ "$(jq -r .state.result_state <<<"$run")" == "SUCCESS" ]] \
+    || fail "Databricks job ${job_name} ended as $(jq -r .state.result_state <<<"$run")"
+
+  task_run_id="$(jq -r '.tasks[0].run_id' <<<"$run")"
+  result="$(databricks jobs get-run-output "$task_run_id" -o json | jq -r .notebook_output.result)"
+  message="$(jq -r .message <<<"$result")"
+  read_build="$(jq -r .build_id <<<"$result")"
+  rows="$(jq -r .rows <<<"$result")"
+
+  [[ "$message" == "Hello World" ]] || fail "notebook returned message '${message}', expected 'Hello World'"
+  # The notebook must have read the file written by this run's ADLS test, not an old copy.
+  [[ "$read_build" == "$build_id" ]] || fail "notebook read build '${read_build}', expected this run's build '${build_id}'"
+  pass "Databricks ${job_name} read '${message}' from build ${read_build} into $(jq -r .table <<<"$result") (${rows} row)"
+}
+
 case "${1:-}" in
   adls) shift; test_adls "$@" ;;
   adf)  shift; test_adf "$@" ;;
-  *) echo "usage: $0 {adls <account> | adf <resource-group> <factory>}" >&2; exit 2 ;;
+  databricks) shift; test_databricks "$@" ;;
+  *) echo "usage: $0 {adls <account> | adf <resource-group> <factory> | databricks <job-name>}" >&2; exit 2 ;;
 esac

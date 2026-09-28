@@ -30,6 +30,9 @@ stages:
     displayName: Test ${{ parameters.environmentName }}
     dependsOn: ${{ parameters.dependsOn }}
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), ${{ parameters.branchCondition }})
+    variables:
+      # Provides DATABRICKS-HOST for the Databricks smoke test.
+      - group: vg-dataplatform-dev
     jobs:
       - job: SmokeTest
         pool:
@@ -53,6 +56,19 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: bash ./scripts/smoke-test-hello.sh adls "${{ parameters.storageAccountName }}"
+          # Runs after the ADLS test so the notebook reads the file this run just wrote.
+          - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS')) }}:
+            - task: AzureCLI@2
+              displayName: "Hello world: Databricks job and Unity Catalog table"
+              timeoutInMinutes: 40
+              inputs:
+                azureSubscription: ${{ parameters.serviceConnection }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: bash ./scripts/smoke-test-hello.sh databricks "job_hello_world_${{ parameters.environmentName }}"
+              env:
+                DATABRICKS_HOST: $(DATABRICKS-HOST)
+                DATABRICKS_AUTH_TYPE: azure-cli
           - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS'), eq(parameters.deploymentProfile, 'ADF_ONLY')) }}:
             - task: AzureCLI@2
               displayName: "Hello world: ADF pipeline run"

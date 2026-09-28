@@ -1,0 +1,35 @@
+{
+  "name": "job_hello_world___ENVIRONMENT__",
+  "description": "Hello-world smoke test run by the workload pipeline after each deployment.",
+  "tags": {
+    "framework": "plug-and-play-cicd",
+    "purpose": "smoke-test"
+  },
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 1800,
+  "tasks": [
+    {
+      "task_key": "hello_world",
+      "notebook_task": {
+        "notebook_path": "/Shared/__ENVIRONMENT__/00_hello_world",
+        "base_parameters": {
+          "catalog": "dataplatform___ENVIRONMENT__",
+          "storage_account": "stdataplatformsyrendev01"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "15.4.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "data_security_mode": "SINGLE_USER",
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      }
+    }
+  ]
+}
