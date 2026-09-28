@@ -6,7 +6,7 @@ parameters:
 steps:
   - bash: |
       set -euo pipefail
-      # SonarQube, tflint, Checkov, and Trivy are configured on the open-source agent image.
+      # Infrastructure checks (fmt, tflint, Checkov) run in pipelines/infra-pipeline.yml.
       # Developer team owns application test cases under tests/.
       if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
         python3 -m pip install -r microservices/orders-api/requirements.txt coverage
@@ -16,13 +16,6 @@ steps:
         echo 'No developer-owned tests found; SonarQube will report no application coverage for this project.'
       fi
     displayName: Prepare developer test coverage
-
-  - bash: |
-      set -euo pipefail
-      terraform fmt -check -recursive infra
-      if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi
-      if command -v checkov >/dev/null 2>&1; then checkov -d infra --quiet --config-file .checkov.yaml; fi
-    displayName: Code quality and IaC validation
 
   # Excluded from the run entirely when off, so the pipeline works before the
   # SonarQube extension is installed in the organization.

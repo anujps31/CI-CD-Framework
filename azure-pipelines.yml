@@ -1,3 +1,5 @@
+# Workload pipeline: builds, scans and deploys ADF, Databricks and microservice content.
+# Infrastructure (Terraform/OpenTofu) lives in pipelines/infra-pipeline.yml and never runs here.
 trigger:
   # This framework is Dev-only: dev is the only branch that starts a push deployment.
   branches:
@@ -5,7 +7,6 @@ trigger:
       - dev
   paths:
     include:
-      - infra/**
       - adf/**
       - notebooks/**
       - dabs/**
@@ -14,12 +15,32 @@ trigger:
       - scripts/**
       - projects/**
       - tests/**
+      - azure-pipelines.yml
+    exclude:
+      - pipelines/infra-pipeline.yml
+      - scripts/infra-plan.sh
+      - scripts/infra-apply.sh
 
 pr:
   branches:
     include:
       # Feature branches validate through pull requests into dev only.
       - dev
+  paths:
+    include:
+      - adf/**
+      - notebooks/**
+      - dabs/**
+      - microservices/**
+      - pipelines/**
+      - scripts/**
+      - projects/**
+      - tests/**
+      - azure-pipelines.yml
+    exclude:
+      - pipelines/infra-pipeline.yml
+      - scripts/infra-plan.sh
+      - scripts/infra-apply.sh
 
 parameters:
   - name: projectName
@@ -115,4 +136,3 @@ stages:
       resourceGroupName: NA_ResourceRG
       dependsOn: Deploy_dev
       branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"
-

@@ -1,0 +1,130 @@
+# Infrastructure pipeline: Terraform/OpenTofu only. Runs when infrastructure code changes.
+# Plan first, show the plan for review, then apply exactly that plan after approval.
+trigger:
+  branches:
+    include:
+      - dev
+  paths:
+    include:
+      - infra/**
+      - pipelines/infra-pipeline.yml
+      - scripts/infra-plan.sh
+      - scripts/infra-apply.sh
+      - .checkov.yaml
+
+pr:
+  branches:
+    include:
+      - dev
+  paths:
+    include:
+      - infra/**
+      - pipelines/infra-pipeline.yml
+      - scripts/infra-plan.sh
+      - scripts/infra-apply.sh
+      - .checkov.yaml
+
+parameters:
+  - name: allowEmptyState
+    displayName: Allow an empty Terraform state (genuine first deployment only)
+    type: boolean
+    default: false
+
+variables:
+  - group: vg-dataplatform-shared
+  - group: vg-dataplatform-dev
+  - name: selfHostedPool
+    value: azure-data-platform
+
+stages:
+  - stage: Validate
+    displayName: Validate infrastructure code
+    jobs:
+      - job: IaC
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - bash: |
+              set -euo pipefail
+              terraform fmt -check -recursive infra
+              terraform -chdir=infra init -backend=false -input=false
+              terraform -chdir=infra validate
+              if command -v tflint >/dev/null 2>&1; then tflint --chdir infra; fi
+              checkov -d infra --quiet --config-file .checkov.yaml
+            displayName: Format, validate, tflint and Checkov
+          - bash: ./scripts/cleanup-agent-workspace.sh
+            condition: always()
+            displayName: Clean self-hosted agent workspace
+
+  - stage: Plan
+    displayName: Plan infrastructure changes
+    dependsOn: Validate
+    jobs:
+      - job: Plan
+        pool:
+          name: $(selfHostedPool)
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            name: planStep
+            displayName: Plan, empty-state guard and delete gate
+            inputs:
+              azureSubscription: svc-dataplatform-dev
+              scriptType: bash
+              scriptLocation: inlineScript
+              # Exposes the service connection's federated token as $idToken.
+              addSpnToEnvironment: true
+              inlineScript: bash ./scripts/infra-plan.sh dev "$(Build.ArtifactStagingDirectory)/infra-plan"
+            env:
+              ARM_SUBSCRIPTION_ID: $(ARM-SUBSCRIPTION-ID)
+              ALLOW_EMPTY_STATE: ${{ parameters.allowEmptyState }}
+              TF_VAR_databricks_host: $(DATABRICKS-HOST)
+              TF_VAR_databricks_account_id: $(DATABRICKS-ACCOUNT-ID)
+              TF_VAR_databricks_client_id: $(DATABRICKS-CLIENT-ID)
+              TF_VAR_databricks_client_secret: $(DATABRICKS-CLIENT-SECRET)
+          - task: PublishPipelineArtifact@1
+            displayName: Publish reviewed plan
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/infra-plan
+              artifact: infra-plan
+          - bash: ./scripts/cleanup-agent-workspace.sh
+            condition: always()
+            displayName: Clean self-hosted agent workspace
+
+  - stage: Apply
+    displayName: Apply reviewed plan
+    dependsOn: Plan
+    # Only on dev, never for pull requests, and only when the plan has changes.
+    condition: >-
+      and(succeeded(),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          eq(variables['Build.SourceBranch'], 'refs/heads/dev'),
+          eq(dependencies.Plan.outputs['Plan.planStep.hasChanges'], 'true'))
+    jobs:
+      - deployment: Apply
+        # Add an Approvals check to this environment: the approver reviews the plan on the
+        # run's Summary tab before this job starts.
+        environment: dev-infra
+        pool:
+          name: $(selfHostedPool)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - download: current
+                  artifact: infra-plan
+                - task: AzureCLI@2
+                  displayName: Apply the saved plan
+                  inputs:
+                    azureSubscription: svc-dataplatform-dev
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    addSpnToEnvironment: true
+                    inlineScript: bash ./scripts/infra-apply.sh dev "$(Pipeline.Workspace)/infra-plan"
+                  env:
+                    ARM_SUBSCRIPTION_ID: $(ARM-SUBSCRIPTION-ID)
+                - bash: ./scripts/cleanup-agent-workspace.sh
+                  condition: always()
+                  displayName: Clean self-hosted agent workspace
