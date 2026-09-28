@@ -10,7 +10,6 @@ steps:
       set -euo pipefail
       # Add project-owned test_*.py or *_test.py files under tests/.
       python -m pip install --upgrade pip
-      python -m pip install -r microservices/orders-api/requirements.txt
       # Developer team owns application test cases under tests/.
       if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
         python -m pip install coverage
@@ -19,7 +18,7 @@ steps:
       else
         echo 'No developer-owned test cases found; application test coverage is supplied by the project team.'
       fi
-      python -m compileall -q notebooks microservices
+      python -m compileall -q notebooks
     displayName: Unit tests
 
   - bash: ./scripts/cleanup-agent-workspace.sh

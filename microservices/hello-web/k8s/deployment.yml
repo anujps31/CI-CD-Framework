@@ -1,0 +1,63 @@
+# The deployment script replaces __IMAGE__, __ENVIRONMENT__ and __ALLOWED_CIDRS__.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-web
+  labels:
+    app: hello-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-web
+  template:
+    metadata:
+      labels:
+        app: hello-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: hello-web
+          image: __IMAGE__
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+---
+# Private load balancer: an internal IP in the AKS subnet, reachable only from inside the VNet
+# (runner VM, pipeline agent). No firewall rule needed: the NSG allows VNet traffic by default.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-web-internal
+  labels:
+    app: hello-web
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: hello-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

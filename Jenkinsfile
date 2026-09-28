@@ -23,7 +23,6 @@ pipeline {
 
     stage('Unit Testing') {
       steps {
-        sh 'python3 -m pip install -r microservices/orders-api/requirements.txt'
         sh '''
           set -euo pipefail
           # Developer team owns application test cases under tests/.

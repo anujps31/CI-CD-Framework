@@ -55,7 +55,8 @@ parameters:
     type: string
     # Select one profile; this controls which components are deployed.
     default: ADF_DATABRICKS
-    values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY]
+    # values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY]
+    values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY, MICROSERVICES_ONLY, FULL_PLATFORM]
   - name: runSonarQube
     type: boolean
     # Turn on once the SonarQube extension and sonarqube-service-connection exist.
@@ -140,6 +141,7 @@ stages:
       resourceGroupName: NA_ResourceRG
       storageAccountName: stdataplatformsyrendev01
       dataFactoryName: adf-dataplatform-syrendev01
+      aksName: aks-dataplatform-dev
       deploymentProfile: ${{ parameters.deploymentProfile }}
       dependsOn: Deploy_dev
       branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"

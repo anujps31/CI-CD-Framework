@@ -32,6 +32,23 @@ resource "azurerm_network_security_group" "aks" {
   tags                = local.tags
 }
 
+resource "azurerm_network_security_rule" "aks_hello_web_http" {
+  # Lets the listed client IPs reach the hello-web demo page's public load balancer on port 80.
+  # Must match HELLO-ALLOWED-CIDRS, which the Kubernetes Service uses as loadBalancerSourceRanges.
+  count                       = var.enable_microservices && length(var.aks_public_allowed_ip_ranges) > 0 ? 1 : 0
+  name                        = "allow-hello-web-http"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefixes     = var.aks_public_allowed_ip_ranges
+  destination_address_prefix  = "*"
+  resource_group_name         = data.azurerm_resource_group.dev.name
+  network_security_group_name = azurerm_network_security_group.aks[0].name
+}
+
 resource "azurerm_network_security_rule" "private_endpoints_https" {
   name                        = "allow-vnet-https"
   priority                    = 100
@@ -351,3 +368,4 @@ resource "azurerm_private_endpoint" "databricks" {
     private_dns_zone_ids = [azurerm_private_dns_zone.databricks.id]
   }
 }
+

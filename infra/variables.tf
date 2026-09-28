@@ -155,3 +155,9 @@ variable "azdo_agent_pat_secret_name" {
   description = "Key Vault secret holding the PAT used only for first-time agent registration."
   default     = "azdo-agent-pat"
 }
+
+variable "aks_public_allowed_ip_ranges" {
+  type        = list(string)
+  description = "Client IP ranges (CIDR) allowed to reach public demo services on AKS, e.g. hello-web. Empty means no public access."
+  default     = []
+}

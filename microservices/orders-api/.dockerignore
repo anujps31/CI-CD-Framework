@@ -1,5 +1,0 @@
-k8s/
-__pycache__/
-*.pyc
-.dockerignore
-Dockerfile

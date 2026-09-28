@@ -14,6 +14,9 @@ parameters:
   - name: dataFactoryName
     type: string
     # Data Factory that hosts pl_hello_world.
+  - name: aksName
+    type: string
+    # AKS cluster that hosts hello-web.
   - name: deploymentProfile
     type: string
     # Workload tests only run for components the profile deployed.
@@ -77,6 +80,14 @@ stages:
                 scriptType: bash
                 scriptLocation: inlineScript
                 inlineScript: bash ./scripts/smoke-test-hello.sh adf "${{ parameters.resourceGroupName }}" "${{ parameters.dataFactoryName }}"
+          - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'MICROSERVICES_ONLY')) }}:
+            - task: AzureCLI@2
+              displayName: "Hello world: web page on AKS"
+              inputs:
+                azureSubscription: ${{ parameters.serviceConnection }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: bash ./scripts/smoke-test-hello.sh web "${{ parameters.resourceGroupName }}" "${{ parameters.aksName }}" "${{ parameters.environmentName }}" hello-web
           - bash: ./scripts/cleanup-agent-workspace.sh
             condition: always()
             displayName: Clean self-hosted agent workspace

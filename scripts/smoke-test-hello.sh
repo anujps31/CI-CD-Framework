@@ -5,6 +5,7 @@
 #   smoke-test-hello.sh adls <storage-account>
 #   smoke-test-hello.sh adf  <resource-group> <factory-name>
 #   smoke-test-hello.sh databricks <job-name>     (needs DATABRICKS_HOST; run after the adls test)
+#   smoke-test-hello.sh web <resource-group> <aks-name> <namespace> [service]
 set -euo pipefail
 
 build_id="${BUILD_BUILDID:-local}"
@@ -87,9 +88,43 @@ test_databricks() {
   pass "Databricks ${job_name} read '${message}' from build ${read_build} into $(jq -r .table <<<"$result") (${rows} row)"
 }
 
+test_web() {
+  local rg="${1:?resource group is required}" aks="${2:?AKS name is required}"
+  local namespace="${3:?namespace is required}" service="${4:-hello-web}"
+  local work page ip
+  work="$(mktemp -d)"
+  export KUBECONFIG="${work}/kubeconfig"
+  az aks get-credentials --resource-group "$rg" --name "$aks" --file "$KUBECONFIG" --overwrite-existing -o none \
+    || fail "could not get credentials for AKS ${aks}"
+
+  # Call the Service from inside the cluster: the public IP only admits the allowed client
+  # ranges, and this agent is not one of them.
+  page="$(kubectl exec -n "$namespace" "deploy/${service}" -- wget -qO- "http://${service}.${namespace}.svc.cluster.local/")" \
+    || fail "could not reach service ${service} in namespace ${namespace}"
+  grep -q "<h1>Hello World</h1>" <<<"$page" || fail "${service} did not return the Hello World page"
+  grep -q ">${build_id}<" <<<"$page" || fail "${service} is not serving this build (${build_id}); an older version may still be running"
+  pass "${service} answered inside the cluster with 'Hello World' for build ${build_id}"
+
+  # Private path: this agent is inside the VNet, so it can call the internal load balancer
+  # directly, exactly as the runner VM does.
+  local private_ip public_ip private_page
+  private_ip="$(kubectl get service "${service}-internal" -n "$namespace" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+  [[ -n "$private_ip" ]] || fail "${service}-internal has no private IP; run: kubectl describe service ${service}-internal -n ${namespace}"
+  private_page="$(curl -fsS --max-time 15 "http://${private_ip}/")" \
+    || fail "could not reach the private load balancer http://${private_ip}/ from inside the VNet"
+  grep -q ">${build_id}<" <<<"$private_page" || fail "private load balancer is not serving build ${build_id}"
+  pass "${service} answered over the VNet at http://${private_ip}/ (private) for build ${build_id}"
+
+  public_ip="$(kubectl get service "$service" -n "$namespace" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+  echo "Browser (allowed IPs only): http://${public_ip:-<pending>}/"
+  echo "Runner VM (curl):           http://${private_ip}/"
+  rm -rf "$work"
+}
+
 case "${1:-}" in
   adls) shift; test_adls "$@" ;;
   adf)  shift; test_adf "$@" ;;
   databricks) shift; test_databricks "$@" ;;
-  *) echo "usage: $0 {adls <account> | adf <resource-group> <factory> | databricks <job-name>}" >&2; exit 2 ;;
+  web) shift; test_web "$@" ;;
+  *) echo "usage: $0 {adls <account> | adf <resource-group> <factory> | databricks <job-name> | web <resource-group> <aks> <namespace> [service]}" >&2; exit 2 ;;
 esac
