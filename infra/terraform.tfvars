@@ -1,4 +1,4 @@
-﻿tenant_id                    = "c7ac8f34-d29e-4f96-b9c9-c50d7c861f3b"
+tenant_id                    = "c7ac8f34-d29e-4f96-b9c9-c50d7c861f3b"
 dev_admin_object_ids         = ["fa6eca8d-3824-4f3d-9ef3-dfb98d42af17"]
 dev_data_engineer_object_ids = ["7b81c49a-d00f-472d-bc74-339ec68cb5e5"]
 # manage_access_control        = true
