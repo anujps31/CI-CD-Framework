@@ -14,7 +14,7 @@ if [[ -d "$notebooks" ]]; then
 fi
 
 jobs_dir="${artifact_dir}/databricks/jobs"
-[[ -d "$jobs_dir" ]] || exit 0
+[[ -d "$jobs_dir" ]] || { echo "No job definitions found under databricks/jobs; skipping jobs."; exit 0; }
 for spec in "$jobs_dir"/*.json; do
   [[ -e "$spec" ]] || continue
   rendered="$(mktemp)"
