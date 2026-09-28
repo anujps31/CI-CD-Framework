@@ -11,8 +11,7 @@
   },
   "resources": [
     {
-      "comment": "Hello-world smoke test: one Set Variable activity, no linked services or compute.",
-      "type": "Microsoft.DataFactory/factories/pipelines",
+      "comments": "Hello-world smoke test: one Set Variable activity, no linked services or compute.",      "type": "Microsoft.DataFactory/factories/pipelines",
       "apiVersion": "2018-06-01",
       "name": "[concat(parameters('factoryName'), '/pl_hello_world')]",
       "properties": {
