@@ -23,7 +23,7 @@ cp -R "${artifact_dir}/microservices/${service_name}" "${work}/src"
 sed -i -e "s|__BUILD_ID__|${image_tag}|g" -e "s|__ENVIRONMENT__|${environment}|g" "${work}/src/index.html"
 
 az acr login --name "$acr_name"
-docker build --tag "$image" "${work}/src"
+docker build --pull --tag "$image" "${work}/src"
 docker push "$image"
 docker image rm "$image" >/dev/null 2>&1 || true
 
