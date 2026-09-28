@@ -4,10 +4,19 @@ parameters:
     # Display name for the smoke-test stage; normally dev only.
   - name: serviceConnection
     type: string
-    # Azure DevOps connection used to read the deployed resource group.
+    # Azure DevOps connection used to read and exercise the deployed resources.
   - name: resourceGroupName
     type: string
     # Exact resource group created by Terraform for this environment.
+  - name: storageAccountName
+    type: string
+    # ADLS Gen2 account the hello-world file is written to.
+  - name: dataFactoryName
+    type: string
+    # Data Factory that hosts pl_hello_world.
+  - name: deploymentProfile
+    type: string
+    # Workload tests only run for components the profile deployed.
   - name: dependsOn
     type: string
   - name: branchCondition
@@ -16,7 +25,7 @@ parameters:
     default: "true"
 
 stages:
-  # The smoke stage verifies that deployment created the expected Azure resource boundary.
+  # Smoke tests prove each deployed component works end to end, not just that it exists.
   - stage: Test_${{ parameters.environmentName }}
     displayName: Test ${{ parameters.environmentName }}
     dependsOn: ${{ parameters.dependsOn }}
@@ -37,6 +46,21 @@ stages:
                 set -euo pipefail
                 az group show --name "${{ parameters.resourceGroupName }}" --output none
                 az resource list --resource-group "${{ parameters.resourceGroupName }}" --output table
+          - task: AzureCLI@2
+            displayName: "Hello world: ADLS write and read"
+            inputs:
+              azureSubscription: ${{ parameters.serviceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: bash ./scripts/smoke-test-hello.sh adls "${{ parameters.storageAccountName }}"
+          - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS'), eq(parameters.deploymentProfile, 'ADF_ONLY')) }}:
+            - task: AzureCLI@2
+              displayName: "Hello world: ADF pipeline run"
+              inputs:
+                azureSubscription: ${{ parameters.serviceConnection }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: bash ./scripts/smoke-test-hello.sh adf "${{ parameters.resourceGroupName }}" "${{ parameters.dataFactoryName }}"
           - bash: ./scripts/cleanup-agent-workspace.sh
             condition: always()
             displayName: Clean self-hosted agent workspace

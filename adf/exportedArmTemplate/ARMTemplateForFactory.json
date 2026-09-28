@@ -9,5 +9,29 @@
       "allowedValues": ["Enabled", "Disabled"]
     }
   },
-  "resources": []
+  "resources": [
+    {
+      "comment": "Hello-world smoke test: one Set Variable activity, no linked services or compute.",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "apiVersion": "2018-06-01",
+      "name": "[concat(parameters('factoryName'), '/pl_hello_world')]",
+      "properties": {
+        "description": "Smoke test run by the workload pipeline after each deployment.",
+        "activities": [
+          {
+            "name": "SetGreeting",
+            "type": "SetVariable",
+            "typeProperties": {
+              "variableName": "greeting",
+              "value": "Hello World"
+            }
+          }
+        ],
+        "variables": {
+          "greeting": { "type": "String" }
+        },
+        "folder": { "name": "smoke-tests" }
+      }
+    }
+  ]
 }

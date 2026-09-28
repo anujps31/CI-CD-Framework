@@ -134,5 +134,8 @@ stages:
       environmentName: dev
       serviceConnection: svc-dataplatform-dev
       resourceGroupName: NA_ResourceRG
+      storageAccountName: stdataplatformsyrendev01
+      dataFactoryName: adf-dataplatform-syrendev01
+      deploymentProfile: ${{ parameters.deploymentProfile }}
       dependsOn: Deploy_dev
       branchCondition: "eq(variables['Build.SourceBranch'], 'refs/heads/dev')"
