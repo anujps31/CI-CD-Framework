@@ -58,8 +58,6 @@ stages:
                     DATABRICKS_CLIENT_SECRET: $(DATABRICKS-CLIENT-SECRET)
                     ACR_NAME: $(ACR-NAME)
                     AKS_NAME: $(AKS-NAME)
-                    # Client IP ranges allowed to open the public hello-web page, e.g. 1.2.3.4/32,5.6.7.8/32.
-                    ALLOWED_CIDRS: $(HELLO-ALLOWED-CIDRS)
                 # Infrastructure is applied by pipelines/infra-pipeline.yml, never by this pipeline.
                 # DATABRICKS-HOST and resource names come from the variable groups.
                 # ADF and Databricks steps run inside AzureCLI@2 so they are signed in as the
@@ -115,6 +113,9 @@ stages:
                       inlineScript: |
                         set -euo pipefail
                         ./scripts/deploy-microservice.sh "${{ parameters.environmentName }}" "$(RESOURCE-GROUP-NAME)" "$(ACR-NAME)" "$(AKS-NAME)" "$(Pipeline.Workspace)/build-artifact" hello-web
+                    env:
+                      # Client IP ranges allowed to open the public hello-web page, e.g. 1.2.3.4/32,5.6.7.8/32.
+                      ALLOWED_CIDRS: $(HELLO-ALLOWED-CIDRS)
                 - task: AzureCLI@2
                   displayName: Post-deployment validation
                   inputs:
