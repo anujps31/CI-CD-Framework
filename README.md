@@ -109,7 +109,8 @@ flowchart LR
 | `infra/` | OpenTofu configuration | All Azure and Databricks resources for dev. |
 | `infra/environments/dev/backend.tfvars` | State location | Tells OpenTofu where the dev state lives (`sttfstatedatadev1/tfstate/dataplatform-dev.tfstate`). |
 | `infra/environments/dev/dev.tfvars` | Environment settings | Subscription, tenant, resource group, `manage_access_control`, feature flags. **Wins** over `terraform.tfvars`. |
-| `infra/terraform.tfvars` | Shared settings | IDs, IP allow-lists, runner VM settings, feature flags. Loaded automatically. |
+| `infra/terraform.tfvars` | Shared settings | IDs, IP allow-lists, runner VM settings, feature flags, `uc_admin_principals`, `enable_testing_access`. Loaded automatically. |
+| `infra/testing_access.tf` | Temporary testing access | Interactive cluster + Unity Catalog grants for the data testing team, behind `enable_testing_access` (Section 11.10). |
 | `scripts/infra-plan.sh` / `infra-apply.sh` | Infra pipeline logic | OIDC sign-in, empty-state guard, plan, delete gate, plan summary, apply. |
 | `scripts/deploy-adf.sh` | ADF deploy | Validates and deploys `adf/exportedArmTemplate` (Incremental mode). |
 | `scripts/deploy-databricks.sh` | Databricks deploy | Imports `notebooks/` and creates/updates every job in `databricks/jobs/` by name. |
@@ -121,10 +122,10 @@ flowchart LR
 | `scripts/setup-sonarqube.sh` | SonarQube server | Runs SonarQube Community Build + PostgreSQL in Docker on the runner VM. |
 | `scripts/cleanup-agent-workspace.sh` | Agent hygiene | Clears job folders and unused Docker data after every job (keeps labelled SonarQube data). |
 | `adf/exportedArmTemplate/` | ADF content | ARM template with ADF **content** (pipelines etc.). Currently `pl_hello_world`. |
-| `notebooks/` | Databricks notebooks | `00_hello_world.py` (smoke test), `01_ingest_raw.py`, `02_transform_silver.py` (samples). |
+| `notebooks/` | Databricks notebooks | `00_hello_world.py` (smoke test), `01_ingest_raw.py` → `<catalog>.raw.ingestion`, `02_transform_silver.py` → `<catalog>.silver.ingestion`. Every notebook starts with `# Databricks notebook source`. |
 | `databricks/jobs/` | Databricks job definitions | One JSON per job. `__ENVIRONMENT__` is replaced at deploy time. |
-| `dabs/` | Databricks Asset Bundle | Used only by the `DATABRICKS_DABS` profile. |
-| `microservices/hello-web/` | Demo web page | Static nginx page + Kubernetes manifest (Deployment, public and private Services). |
+| `dabs/` | Databricks Asset Bundle | Used only by the `DATABRICKS_DABS` profile. Deploys job `dataplatform-ingestion-dev` (runs `01_ingest_raw`). |
+| `microservices/hello-web/` | Demo web page | Static nginx page + Kubernetes manifest (Deployment + private Service `hello-web-internal`; a public Service is optional, for demos). |
 | `projects/dataplatform/onboarding.yml` | Project manifest | Records project names and inputs for onboarding a project. |
 | `.checkov.yaml` | Checkov skip list | 25 accepted dev risks, each with a reason (Section 13). |
 | `.gitattributes` | Line endings | Forces LF for `.sh`, `.tf`, `.yml`, so scripts work on Linux even when edited on Windows. |
@@ -132,7 +133,6 @@ flowchart LR
 | `.gitignore` | Ignored files | State files, `.terraform/`, plan files, lock file (see Section 14). |
 | `sonar-project.properties` | SonarQube project | Project key and source folders. |
 | `Jenkinsfile` | Legacy | Jenkins path from the original framework. **Not maintained**; Azure DevOps is the only CI/CD in use. |
-| `README_dev.md`, `CLAUDE.md` | Older notes | Written before the current design; superseded by this README. |
 
 ---
 
@@ -153,7 +153,7 @@ which use fixed names with a `syrendev01` suffix.
 | Subnet: AKS | `snet-aks` (`10.20.20.0/22`) | AKS nodes and pods (Azure CNI needs a large range). Also hosts the hello-web internal load balancer IP. |
 | Subnet: runner | `snet-azdo-runner-01` (`10.20.24.0/24`) | The self-hosted agent VM. |
 | NSGs | `nsg-dataplatform-dev-{databricks,private-endpoints,aks,azdo-runner-01}` | One per subnet so rules can evolve independently. Internet inbound denied; VNet traffic allowed. |
-| NSG rule | `allow-hello-web-http` (on the AKS NSG) | Lets `aks_public_allowed_ip_ranges` reach the hello-web public page on port 80. Only created when that list is not empty. |
+| NSG rule | `allow-hello-web-http` (on the AKS NSG) | Lets `aks_public_allowed_ip_ranges` reach a public hello-web page on port 80. **Not created while that list is `[]`** (the current setting: hello-web is private only). |
 | Private DNS zones | `privatelink.{blob,dfs}.core.windows.net`, `privatelink.vaultcore.azure.net`, `privatelink.azurecr.io`, `privatelink.datafactory.azure.net`, `privatelink.azuredatabricks.net` | Make the normal service host names resolve to private IPs inside the VNet. Each is linked to the VNet. |
 | Private endpoints | `pe-dataplatform-dev-{blob,dfs,keyvault,acr,adf,databricks}` | Private network paths to each service. |
 | ADLS Gen2 | `stdataplatformsyrendev01` | Data lake. HNS on, public access **off**, shared keys **off** (Entra ID only), TLS 1.2, infrastructure encryption, no anonymous blob access, no SFTP local users. |
@@ -169,6 +169,8 @@ which use fixed names with a `syrendev01` suffix.
 | Unity Catalog | metastore assignment, storage credential `dataplatform-dev-storage-credential`, external location `dataplatform-dev-raw`, catalog `dataplatform_dev`, schemas `raw`, `silver` | Governed data access for Databricks. |
 | Databricks IP access list | `anuj-allow` | Only listed public IPs can open the workspace UI. |
 | Databricks secret scope | `kv-dataplatform-dev` | Key Vault-backed secret scope. |
+| Unity Catalog admin grants | `catalog_admins`, `external_location_admins`, `storage_credential_admins` | `ALL_PRIVILEGES` + `MANAGE` for each entry in `uc_admin_principals`, so admins can run `SHOW GRANTS` on objects the pipeline identity owns. |
+| Testing cluster *(temporary)* | `dataplatform-dev-testing` | All-purpose, 15.4 LTS, `Standard_DS3_v2`, autoscale 1–2 workers, Standard (shared) access mode, auto-terminates after 20 min. Only while `enable_testing_access = true`. |
 
 ### 3.2 Resources that exist outside OpenTofu
 
@@ -220,8 +222,9 @@ the registration script reads from the Azure Instance Metadata Service.
 | **AKS kubelet identity** | System-assigned | Pulling images | **AcrPull** on ACR (`aks_acr_pull`). |
 | **ADF managed identity** | System-assigned | ADF pipelines | Key Vault Secrets User (`adf_key_vault`). |
 | **Databricks access connector** `dac-dataplatform-dev` | System-assigned | Unity Catalog storage credential | Storage Blob Data Contributor on the lake. |
+| **Data testing team** `grp-dataplatform-dev-data-engineers` | Databricks account group (temporary grants) | Ashok's testers | Testing cluster CAN_MANAGE; catalog `USE CATALOG`, `BROWSE`, `READ VOLUME`; schemas `raw`/`silver` `USE SCHEMA`, `SELECT`, `EXECUTE`, `READ VOLUME`, `MANAGE`, `CREATE FUNCTION`, `CREATE TABLE`; storage credential `ALL PRIVILEGES`; CAN_MANAGE on `dataplatform-ingestion-dev` and `job_hello_world_dev`. See Section 11.10. |
 | **AzureDatabricks first-party app** | Object ID `207114a2-…` | Key Vault-backed secret scope | Key Vault Secrets User. |
-| **Human admin** `anuj.s@syrencloud.com` | User | Local `tofu`, portal | Contributor + User Access Administrator on the RG; Storage Blob Data Contributor on the state account; `ALL PRIVILEGES` on the catalog, external location and storage credential. |
+| **Human admin** `anuj.s@syrencloud.com` | User | Local `tofu`, portal, Databricks UI | Contributor + User Access Administrator on the RG; Storage Blob Data Contributor on the state account; `ALL PRIVILEGES` + `MANAGE` on the catalog, external location and storage credential (from `uc_admin_principals`, in code). |
 
 ---
 
@@ -299,7 +302,7 @@ checks real behaviour and the **build number** (`BUILD_BUILDID`), so an old depl
 | `adls` | Writes `raw/landing/hello/hello.csv` (`Hello World,<build>`) and reads it back byte-for-byte | Private DNS + private endpoint + Entra ID data-plane access to the lake. |
 | `databricks` | Runs job `job_hello_world_dev`: a single-node `Standard_DS3_v2` cluster (15.4 LTS) runs `notebooks/00_hello_world.py`, which reads `hello.csv` through the external location and writes table `dataplatform_dev.raw.hello_world`; the test checks the notebook returned `Hello World` **and this build's number** | Compute, secure cluster connectivity, storage credential, access connector, external location, catalog/schema permissions. ~6–10 min, mostly cluster start. |
 | `adf` | Starts `pl_hello_world` (one Set Variable activity), waits for `Succeeded`, checks the activity output is `Hello World` | ADF content deploys from git and runs. No linked services or compute needed. |
-| `web` | Calls `hello-web` inside the cluster, then the **private** load balancer `hello-web-internal` from the agent over the VNet; checks the page shows this build; prints the public and private URLs | Image build → private ACR → AKS pull → Service → internal load balancer → VNet. |
+| `web` | Calls `hello-web-internal` inside the cluster, then the **private** load balancer from the agent over the VNet; checks the page shows this build; prints the private URL (and the public one, if a public Service exists) | Image build → private ACR → AKS pull → Service → internal load balancer → VNet. |
 
 How to look at the results yourself:
 
@@ -317,11 +320,16 @@ curl -s http://<private-ip>/ | grep -E "Hello World|Build"
 az account clear
 ```
 
-Public page: open `http://<public-ip>/` from an allowed IP. Find both IPs from your laptop with:
+Public page (only if a public Service is deployed for a demo, Section 11.9): open `http://<public-ip>/` from an allowed IP. Find the IPs from your laptop with:
 
 ```powershell
 az aks command invoke -g NA_ResourceRG -n aks-dataplatform-dev --command "kubectl get service -n dev -o wide"
 ```
+
+**Querying tables yourself.** Use a notebook attached to a **classic** cluster (for example
+`dataplatform-dev-testing`). **Serverless** compute and the SQL editor's default serverless
+warehouse run outside the VNet, so the storage firewall blocks them from reading table data
+(metadata commands like `SHOW TABLES` still work). See Section 14 for the NCC fix.
 
 ---
 
@@ -362,7 +370,7 @@ Organisation `syrentechnologies`, project **`CICD-FrameWork`**, repository **`CI
 | `DATABRICKS-HOST` | `https://adb-7405607512291709.9.azuredatabricks.net` |
 | `ACR-NAME` | `acrdataplatformsyrendev01` |
 | `AKS-NAME` | `aks-dataplatform-dev` |
-| `HELLO-ALLOWED-CIDRS` | `106.219.172.18/32,49.43.234.125/32` (must match `aks_public_allowed_ip_ranges`) |
+| `HELLO-ALLOWED-CIDRS` | Only used while the manifest has a public Service (demos). Must match `aks_public_allowed_ip_ranges`. |
 
 ---
 
@@ -379,13 +387,15 @@ environment, redo these (or automate them, Section 15).
 | M4 | AKS cluster identity → Network Contributor on `snet-aks` | `az role assignment create --assignee-object-id 3cb728d6-… --assignee-principal-type ServicePrincipal --role "Network Contributor" --scope <snet-aks id>` | Same. Needed for the internal load balancer. |
 | M5 | Human admin → Storage Blob Data Contributor on `sttfstatedatadev1` | same pattern | To run `tofu plan` from a laptop. |
 | M6 | `databricks-uc-terraform-sp` → **Account admin** + added to workspace | Databricks account console → User management → Service principals → Roles; workspace Settings → Identity and access | Account-level; chicken-and-egg. |
-| M7 | Unity Catalog ownership → pipeline identity (`87a4a72f-…`) for storage credential, external location, catalog, schemas `raw`/`silver`; `ALL PRIVILEGES` for the human admin | SQL: `` ALTER … OWNER TO `87a4a72f-…` ``; `` GRANT ALL PRIVILEGES ON … TO `anuj.s@syrencloud.com` `` | Objects were created under a personal login first. |
+| M7 | Unity Catalog ownership → pipeline identity (`87a4a72f-…`) for storage credential, external location, catalog, schemas `raw`/`silver` | SQL: `` ALTER … OWNER TO `87a4a72f-…` `` | Objects were created under a personal login first. Admin access is now in code (`uc_admin_principals`). |
 | M8 | 15 access-control resources and `databricks_grants.catalog` **removed from state** (`tofu state rm`) | Entra groups `grp-dataplatform-dev-*`, their members, 5 RBAC assignments, 4 Databricks groups, catalog grants | Created while `manage_access_control` was `true`; the pipeline can't manage them. They still exist and work. |
 | M9 | Agent pool `azure-data-platform`, PAT (Agent Pools: Read & manage), PAT stored as Key Vault secret `azdo-agent-pat` | Azure DevOps UI; `az keyvault secret set` from the VM | Secrets and Azure DevOps objects. PAT expires **25 Oct 2026**. |
 | M10 | Service connection, variable groups, environments `dev` / `dev-infra` + approval, both pipelines | Azure DevOps UI | Azure DevOps configuration. |
 | M11 | SonarQube server on the VM + admin password + analysis token | `sudo bash scripts/setup-sonarqube.sh`; token via the SonarQube API | Runs once per VM; token is a secret. |
 | M12 | Bastion `bastion-dataplatform-dev` + `pip-bastion` (Basic SKU) | `az network bastion create …` | Created before the framework. |
 | M13 | Agent tool cache `AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache` on the existing VM (so `UsePythonVersion` works) | `/opt/azdo-agent/.env` | Now automatic for rebuilt VMs (registration script). |
+| M14 | Removed a personal Databricks token from the runner VM (`~/.databrickscfg`) and revoked it | `rm -f ~/.databrickscfg; rm -rf ~/.databricks` as `azureagent` | It made bundle deploys run as a person instead of the pipeline identity. **Never save a Databricks login on the VM.** |
+| M15 | Testers added as members of `grp-dataplatform-dev-data-engineers`; group assigned to the workspace | Databricks account console → User management → Groups | Group membership isn't synced from Entra ID automatically. |
 
 ---
 
@@ -504,7 +514,14 @@ M7 is not needed on a fresh build.
 - Notebooks go in `notebooks/`. **The first line must be `# Databricks notebook source`**, or it's imported as a plain file, not a runnable notebook. They land in `/Shared/dev/<name>` (without `.py`).
 - Jobs go in `databricks/jobs/<name>.json` (Jobs API 2.1 JSON). Use `__ENVIRONMENT__` for the environment; name them `job_<name>___ENVIRONMENT__`.
 - The job runs as the pipeline identity, so it needs Unity Catalog privileges on anything it reads or writes. The pipeline identity owns `dataplatform_dev`, so that catalog is covered.
+- Job clusters that touch Unity Catalog need `data_security_mode` (`SINGLE_USER` for jobs). Without it the cluster starts in a legacy mode and can't read governed tables.
+- To give a group access to a JSON job, add a top-level `"access_control_list": [{"group_name": "…", "permission_level": "CAN_MANAGE"}]`. The deploy script applies it with `update-permissions`, which **adds but never removes**; remove permissions in the job's Permissions panel or with `databricks jobs set-permissions <id> --json '{"access_control_list": []}'`.
 - Push, and the workload pipeline creates or updates the job.
+
+The sample ingestion flow: `01_ingest_raw` reads `raw/<source_path>` (default `landing/hello/`, CSV)
+into `dataplatform_dev.raw.ingestion`, adding `_source_file` and `_ingested_at`; `02_transform_silver`
+de-duplicates it into `dataplatform_dev.silver.ingestion`. Change the `source_path` / `source_format`
+widgets (or job parameters) to point at real landing data.
 
 ### 11.3 Add an ADF pipeline
 
@@ -519,7 +536,8 @@ ADF Studio can't be opened from a laptop because the factory's public access is 
 
 Edit `microservices/hello-web/index.html` (keep `__BUILD_ID__` / `__ENVIRONMENT__`, which the tests
 rely on) and push, or run manually with `MICROSERVICES_ONLY`. The manifest must contain **three**
-documents: Deployment, `hello-web` (public) and `hello-web-internal` (private). Check with:
+documents: the Deployment and `hello-web-internal` (private), plus a `hello-web` public Service only
+during a demo (Section 11.9). Check with:
 
 ```powershell
 Select-String -Path microservices\hello-web\k8s\deployment.yml -Pattern "^kind:|^  name:"
@@ -557,15 +575,75 @@ Note that `ignore_changes = [custom_data]` means edits to cloud-init only affect
 | Agent PAT (`azdo-agent-pat`) | 25 Oct 2026 | New PAT (Agent Pools: Read & manage) → `az keyvault secret set` from the VM. The running agent doesn't need it; only a rebuild does. |
 | SonarQube token | as set | SonarQube API `user_tokens/revoke` + `generate` from the VM → update the service connection. |
 
-### 11.9 Change who may open the public hello-web page
+### 11.9 Public hello-web page for a demo (currently off)
 
-Update **both** `aks_public_allowed_ip_ranges` in `infra/terraform.tfvars` (NSG, via the infra
-pipeline) and `HELLO-ALLOWED-CIDRS` in `vg-dataplatform-dev` (Service, via the workload pipeline).
+hello-web is **private only** today. To show it in a browser for a demo:
 
-**To remove public access after a demo:** set the list to `[]`, remove the public Service from the
-manifest, and delete it in the cluster:
+1. Add your IP(s) to `aks_public_allowed_ip_ranges` in `infra/terraform.tfvars` (the NSG rule, through the infra pipeline) **and** to `HELLO-ALLOWED-CIDRS` in `vg-dataplatform-dev`, e.g. `1.2.3.4/32,5.6.7.8/32`.
+2. Add the public Service back to `microservices/hello-web/k8s/deployment.yml` (type `LoadBalancer`, `loadBalancerSourceRanges: __ALLOWED_CIDRS__`) and run `MICROSERVICES_ONLY`. The deploy step prints `Public: http://<ip>/`.
+
+**Remove it after the demo:** set the list to `[]` (no quotes inside), remove the public Service
+from the manifest, and delete it in the cluster:
 `az aks command invoke -g NA_ResourceRG -n aks-dataplatform-dev --command "kubectl delete service hello-web -n dev"`.
-The private Service can stay.
+The NSG rule deletion is blocked by the pipeline's delete gate, so apply it from a laptop with a
+targeted apply (Section 11.12).
+
+### 11.10 Temporary testing access for the data testing team
+
+Requested by Ashok for `grp-dataplatform-dev-data-engineers`. Everything is switched by
+`enable_testing_access` in `infra/terraform.tfvars` and lives in `infra/testing_access.tf`, plus two
+job permission settings.
+
+| Item | Where | Detail |
+|---|---|---|
+| Interactive cluster `dataplatform-dev-testing` | `testing_access.tf` | 15.4 LTS, `Standard_DS3_v2`, autoscale 1–2 workers, Standard (shared) access mode, auto-terminate 20 min. The group has CAN_MANAGE. |
+| Catalog grant | `testing_access.tf` | `USE_CATALOG`, `BROWSE`, `READ_VOLUME` on `dataplatform_dev`. |
+| Schema grants | `testing_access.tf` | `USE_SCHEMA`, `SELECT`, `EXECUTE`, `READ_VOLUME`, `MANAGE`, `CREATE_FUNCTION`, `CREATE_TABLE` on `raw` and `silver`. |
+| Storage credential grant | `testing_access.tf` | `ALL_PRIVILEGES` on `dataplatform-dev-storage-credential` (broad on purpose for now; long term, use `READ FILES` on the external location). |
+| Job permission | `dabs/resources/jobs.yml` | CAN_MANAGE on `dataplatform-ingestion-dev` (bundle `permissions:`). |
+| Job permission | `databricks/jobs/job_hello_world.json` | CAN_MANAGE on `job_hello_world_dev` (`access_control_list`). |
+
+All grants use `databricks_grant` (singular), which manages only this group's privileges and never
+removes anyone else's. `databricks_grants` (plural) would wipe every unlisted grant.
+
+The testers must be **members** of the group in the Databricks account console (M15), and should
+query from the **testing cluster**, not serverless (Section 7).
+
+**Cost** (approx. East US list prices): ≈ $1.40/hour with 1 worker, up to ≈ $2.10/hour with 2
+workers, **$0 while stopped**. Auto-terminate limits a forgotten cluster to about 20 extra minutes.
+
+**Verify:** `tofu state list | Select-String testing` and
+`tofu state show "databricks_grant.testing_catalog[0]"`, or as an admin in `uc_admin_principals`:
+`` SHOW GRANTS `grp-dataplatform-dev-data-engineers` ON CATALOG dataplatform_dev; ``
+
+**Remove when testing ends:**
+
+1. Set `enable_testing_access = false`; delete the `permissions:` block in `jobs.yml` and the `access_control_list` in `job_hello_world.json`.
+2. From a laptop (the delete gate blocks the pipeline): `tofu plan -var-file="environments/dev/dev.tfvars"` must show **only** the six `testing` resources being destroyed; apply them with one `-target` each (Section 11.12).
+3. Remove the job permissions by hand, because the deploy script only adds them: each job → Permissions → remove the group, or `databricks jobs set-permissions <job-id> --json '{"access_control_list": []}'`.
+4. Push, so the code and Azure match.
+
+### 11.11 Databricks Asset Bundle (`DATABRICKS_DABS`)
+
+- **No `host` in `databricks.yml`.** Authentication fields can't use variables; the CLI reads `DATABRICKS_HOST`, set by the pipeline step.
+- **No `mode: development`.** Development mode is for personal copies: it forces a per-user path and prefixes job names. The pipeline deploys one shared copy to `/Workspace/Shared/.bundle/dataplatform-bundle/dev`.
+- **`sync.paths` includes `../notebooks`**, because the job's notebooks live outside `dabs/`.
+- **`DATABRICKS_CONFIG_FILE=/dev/null`** in the step guarantees a saved login on the agent is never used. The bundle log must show the pipeline identity as `User`, never a person.
+- **Job clusters set `data_security_mode: SINGLE_USER`**, so the job can use Unity Catalog.
+
+### 11.12 Applying changes from a laptop when the plan shows 403 errors
+
+A laptop can't read the `raw`/`silver` filesystems (private network), so a full `tofu apply`
+refuses to run. For the rare changes a person must apply (deletions blocked by the delete gate),
+target only those resources, which avoids reading the filesystems:
+
+```powershell
+tofu apply -var-file="environments/dev/dev.tfvars" -target="<address>" -target="<address>"
+```
+
+Check the targeted plan carefully before typing `yes`, and let the pipeline handle everything else.
+For addresses with quotes, such as `databricks_grant.testing_schema["raw"]`, use
+`-target='databricks_grant.testing_schema[\"raw\"]'` in PowerShell.
 
 ---
 
@@ -591,10 +669,18 @@ The private Service can stay.
 | `Databricks job … not found` in the smoke test | `databricks/` missing from the build artifact copy list | `ci-build.yml` must copy `adf notebooks databricks dabs microservices projects scripts`. |
 | ADF deploy: `Could not find member 'comment'` | ARM uses `comments` | Rename the property. |
 | Trivy: dozens of HIGH/CRITICAL in the nginx image | Old base tag / cached base image | `FROM nginxinc/nginx-unprivileged:stable-alpine`, `RUN apk upgrade --no-cache`, and `docker build --pull`. |
-| `ALLOWED_CIDRS is required` | `env:` block missing or mis-indented on the microservice step | `env:` must be at the same indentation as `inputs:`, and `HELLO-ALLOWED-CIDRS` must exist in the variable group. |
-| `services "hello-web" not found` / `wget: bad address` | Public Service missing from the manifest | The manifest needs all three documents (Section 11.4). |
+| `ALLOWED_CIDRS is required` (older script) / "No public Service" message | A public Service needs allowed IPs | Expected while private only. For a demo, set `HELLO-ALLOWED-CIDRS` (Section 11.9). |
+| `services "hello-web" not found` / `wget: bad address` | The test called a Service that isn't in the manifest | Fixed: the test calls `hello-web-internal` and treats the public Service as optional. Keep the Deployment and `hello-web-internal` (Section 11.4). |
 | Internal Service stuck with no IP | AKS identity lacks Network Contributor on `snet-aks` | M4. |
 | Storage portal: "request is not authorized… Firewalls and virtual networks" | Laptop is outside the VNet | Expected. Use the VM or Databricks. Don't open the firewall. |
+| Bundle: `Variable interpolation is not supported for fields that configure authentication` | `workspace.host: ${var.…}` in `databricks.yml` | Remove `host`; the CLI uses `DATABRICKS_HOST`. |
+| Bundle: `root_path must start with '~/' or contain the current username` | `mode: development` in a shared deployment | Remove `mode: development`. |
+| Bundle shows `User: <a person's email>` | A saved login (`~/.databrickscfg`) on the agent | Delete it, revoke the token, keep `DATABRICKS_CONFIG_FILE=/dev/null` in the step. |
+| `SELECT` fails with "Firewalls and virtual networks" in the SQL editor, but `SHOW TABLES` works | Serverless compute is outside the VNet | Use a classic cluster (e.g. `dataplatform-dev-testing`), or configure an NCC (Section 14). |
+| `SHOW GRANTS` → `does not have READ METADATA on Catalog` | Viewing others' grants needs `MANAGE` (not included in `ALL PRIVILEGES`) | Add yourself to `uc_admin_principals`, or check `tofu state show …`. |
+| Laptop `tofu apply` refuses to run after 403 errors | Plans with errors can't be applied | Targeted apply (Section 11.12). |
+| `aks_public_allowed_ip_ranges = [""]` makes the NSG rule invalid | An empty **string** in the list | Use `[]` to disable, or real CIDRs. |
+| Job fails with Unity Catalog errors on a job cluster | `data_security_mode` missing | Set `SINGLE_USER` on job clusters. |
 | Paste into the Bastion console breaks multi-line commands | The console inserts blank lines | Paste one line at a time; avoid trailing `\`; type passwords instead of pasting. |
 | `az` with parentheses fails in PowerShell (`--query was unexpected`) | `az.cmd` quoting | Run the query in two steps, or pass filters differently. |
 | `[IO.File]::ReadAllText` can't find a relative path | .NET uses the process directory, not the PowerShell location | Use `(Resolve-Path "…").Path`. |
@@ -604,11 +690,14 @@ The private Service can stay.
 ## 13. Security notes and accepted risks
 
 - **Checkov accepted risks.** `.checkov.yaml` skips 25 checks with a reason each (customer-managed keys, zone/geo redundancy, LRS, AKS/ACR hardening, etc.). They are acceptable for dev. **Review before any production use**, and remove a skip once the control exists.
-- **Public hello-web page.** Locked to `aks_public_allowed_ip_ranges`, but still internet-facing. Remove it after demos (Section 11.9).
+- **Public hello-web page: currently off.** hello-web is private only. If re-enabled for a demo, it is locked to `aks_public_allowed_ip_ranges`; remove it afterwards (Section 11.9).
 - **Saved plans contain variable values**, including the Databricks secret. Anyone who can download infra pipeline artifacts can read them. Keep pipeline artifact retention short and project access tight.
 - **`databricks-uc-terraform-sp` is a Databricks account admin.** The secret is only in the locked variable group; rotate yearly.
 - **Runner VM identity has broad rights** (Contributor on the RG, Key Vault Secrets Officer). The pipeline doesn't use them; consider reducing them (Section 14).
 - **The GitHub mirror is public** and contains tenant, subscription, object IDs and IP addresses (not secrets, but useful reconnaissance). Make it private, or stop mirroring.
+- **Never save a Databricks login on the runner VM.** Pipeline jobs run as the same `azureagent` user, so a saved token makes deployments run as that person. (One was found and removed, M14.)
+- **Temporary testing access is broad** (`MANAGE` on schemas, `ALL PRIVILEGES` on the storage credential). Remove it when testing ends (Section 11.10).
+- **ACR public access must stay off.** It was enabled by hand once during troubleshooting; the infra plan reverted it. Pushes go over the private endpoint.
 - **No secrets are committed.** Gitleaks runs on every workload build; `terraform.tfvars` has one `# gitleaks:allow` for a client ID.
 
 ---
@@ -618,14 +707,14 @@ The private Service can stay.
 | Item | Status / action |
 |---|---|
 | `.terraform.lock.hcl` is gitignored | Commit it (generated by `tofu providers lock -platform=linux_amd64 -platform=windows_amd64`) so provider versions are pinned everywhere. |
-| `notebooks/01_ingest_raw.py`, `02_transform_silver.py` | Missing the notebook header; `01` builds a wrong storage path (`storage<catalog>` instead of `stdataplatformsyrendev01`). Fix before use. |
+| Serverless / SQL editor access to data | Serverless can't reach the private lake. Add a Databricks **network connectivity configuration (NCC)** with private endpoint rules to `stdataplatformsyrendev01` (`dfs`, `blob`), approve them on the storage account, and bind the NCC to the workspace. Or use a Pro/Classic SQL warehouse. |
 | SonarQube | Server runs on the VM; waiting for the Marketplace extension approval, then create `sonarqube-service-connection` and set `runSonarQube: true`. |
 | Default profile | Push runs use `ADF_DATABRICKS`. Consider `FULL_PLATFORM` (tests everything, ~15–20 min, one Databricks cluster per run) or path-based profile selection. |
 | ADF authoring | ADF Studio is unreachable with public access off. Options: a `portal` private endpoint + access from inside the VNet, or a separate authoring factory with Git integration. |
 | Cost controls | `infra/governance.tf` (Log Analytics, diagnostics, budget, cluster policy) is commented out. Enable after dev testing. |
 | Runner VM roles | `azdo_runner_*` role assignments are broader than needed. Reduce to Key Vault Secrets User once confirmed. |
-| `DATABRICKS_DABS` profile | Not exercised in this setup yet. |
-| Old docs / Jenkins | `README_dev.md`, `CLAUDE.md` and `Jenkinsfile` are outdated. Delete or mark them as legacy. |
+| Temporary testing access | Switch off with `enable_testing_access = false` when Ashok's team is done (Section 11.10). |
+| Jenkins | `Jenkinsfile` is outdated (Azure DevOps is the only CI/CD in use). Delete it or mark it as legacy. |
 
 ---
 
@@ -641,7 +730,7 @@ Access Administrator, plus a few additions to the main stack.
 | M1 state storage + versioning | ✅ | `bootstrap/` stack: `azurerm_storage_account`, `azurerm_storage_container`, `blob_properties { versioning_enabled = true, delete_retention_policy {…}, container_delete_retention_policy {…} }` (bootstrap uses local state or its own key). | Admin runs it once. |
 | M2, M3, M5 blob roles | ✅ | `bootstrap/`: `azurerm_role_assignment` for the pipeline identity on both storage accounts, and for named admins. | Admin with User Access Administrator. |
 | M4 AKS Network Contributor | ✅ | Main stack: `azurerm_role_assignment "aks_subnet_network"` (scope `azurerm_subnet.aks[0].id`, principal `azurerm_kubernetes_cluster.dev[0].identity[0].principal_id`), gated by a new `manage_workload_rbac` flag. | Grant the pipeline identity **Role Based Access Control Administrator** on the RG, **with a condition** limiting it to the few roles it needs (Storage Blob Data Contributor, Network Contributor, AcrPull, Key Vault Secrets User). |
-| M7 Unity Catalog ownership | ✅ | Main stack: set `owner = var.uc_owner` (the pipeline identity's client ID) on `databricks_storage_credential`, `databricks_external_location`, `databricks_catalog` and both `databricks_schema`s. OpenTofu then enforces the owner on every apply. | Already possible: the pipeline owns them. |
+| M7 Unity Catalog ownership | ✅ partly done | Admin `MANAGE` is in code (`uc_admin_principals`). Still to do: set `owner = var.uc_owner` (the pipeline identity's client ID) on the storage credential, external location, catalog and schemas, so OpenTofu enforces ownership. | Already possible: the pipeline owns them. |
 | M8 access control (groups, RBAC, catalog grants) | ✅ partly | Catalog grants: re-add `databricks_grants` under a new `manage_uc_grants` flag (the pipeline can grant, since it owns the catalog) and `import` the existing ones. Entra groups/RBAC: a separate **access** stack run by an Entra admin, importing the existing groups with `import {}` blocks. | For Entra: Microsoft Graph `Group.ReadWrite.All` with admin consent. |
 | M6 UC SP account admin | ⚠️ | `databricks_service_principal_role` with `role = "account_admin"` in `bootstrap/`, run by an existing account admin. | A human account admin, once. |
 | M9 agent pool | ✅ | Azure DevOps OpenTofu provider (`microsoft/azuredevops`): `azuredevops_agent_pool`, `azuredevops_agent_queue`. | A PAT/identity with project admin rights. |
@@ -649,6 +738,8 @@ Access Administrator, plus a few additions to the main stack.
 | M10 service connection, variable groups, environments + approvals, pipelines | ✅ | `azuredevops` provider: `azuredevops_serviceendpoint_azurerm` (workload identity federation), `azuredevops_variable_group` (optionally **linked to Key Vault** so secrets aren't copied into Azure DevOps), `azuredevops_environment`, `azuredevops_check_approval`, `azuredevops_build_definition`. | Project admin identity. |
 | M11 SonarQube | ✅ partly | Call `scripts/setup-sonarqube.sh` from cloud-init; create the token with the SonarQube API in a one-off script and store it in Key Vault. | Extension approval. |
 | M12 Bastion | ✅ | Main stack: `azurerm_subnet "AzureBastionSubnet"`, `azurerm_public_ip`, `azurerm_bastion_host`, adopting the existing ones with `import {}` blocks (supported by OpenTofu 1.7) so nothing is recreated. | None. |
+| NCC for serverless | ✅ | `databricks_mws_network_connectivity_config`, `databricks_mws_ncc_private_endpoint_rule` (dfs, blob) and `databricks_mws_ncc_binding` with the `databricks.account` provider; approve the private endpoints on the storage account. | Account admin (the UC SP already is). |
+| M14/M15 | ⚠️ | M14 is a rule, not a task. M15 (group members) can be automated with `databricks_group_member`, or by enabling Entra ID group sync (automatic identity management). | Account admin. |
 | M13 agent tool cache | ✅ done | Handled by `register-self-hosted-agent.sh` for new VMs. | — |
 
 **Suggested order:** (1) UC `owner` in code (M7) and Bastion import (M12), which are low risk and
