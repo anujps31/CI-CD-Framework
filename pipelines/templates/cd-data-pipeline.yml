@@ -86,7 +86,6 @@ stages:
                         set -euo pipefail
                         export DATABRICKS_HOST="$(DATABRICKS-HOST)"
                         export DATABRICKS_AUTH_TYPE=azure-cli
-                        export DATABRICKS_BUNDLE_VAR_workspace_host="$(DATABRICKS-HOST)"
                         databricks bundle validate -t "${{ parameters.environmentName }}"
                         databricks bundle deploy -t "${{ parameters.environmentName }}"
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS')) }}:

@@ -5,15 +5,18 @@ bundle:
 include:
   - resources/*.yml
 
+# The job's notebooks live in ../notebooks, outside this folder. Adding it here makes the
+# repository root the bundle's sync root, so those notebooks are uploaded with the bundle.
+sync:
+  paths:
+    - .
+    - ../notebooks
+
 variables:
   catalog_name:
     description: Unity Catalog catalog
     # Override per target below; the catalog must exist in the workspace.
     default: dataplatform_dev
-  workspace_host:
-    description: Databricks workspace URL supplied by the pipeline
-    # Replace only through the environment variable group, never commit a real URL as a secret.
-    default: https://placeholder.azuredatabricks.net
   # DEFERRED: cluster_policy_id will be restored with Dev cost controls later.
 
 targets:
@@ -23,7 +26,8 @@ targets:
     mode: development
     default: true
     workspace:
-      host: ${var.workspace_host}
+      # No "host" here: authentication fields can't use variables. The CLI reads the
+      # workspace from DATABRICKS_HOST, which the pipeline step sets from DATABRICKS-HOST.
       root_path: /Workspace/Shared/.bundle/${bundle.name}/dev
     variables:
       catalog_name: dataplatform_dev
