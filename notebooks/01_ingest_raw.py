@@ -1,12 +1,40 @@
 # Databricks notebook source
-from pyspark.sql import SparkSession
+# Ingest landing files from the raw container into the governed table <catalog>.raw.ingestion.
+# Defaults read the hello-world file the pipeline writes, so the job runs out of the box.
+# Point source_path and source_format at the project's real landing zone for real data.
+from pyspark.sql.functions import col, current_timestamp
 
-spark = SparkSession.builder.getOrCreate()
-# Use the supplied catalog so the raw table is created in the intended Dev namespace.
-# The pipeline/DAB should provide catalog; this default is for local notebook testing only.
-catalog = dbutils.widgets.get("catalog") if "catalog" in [w.name for w in dbutils.widgets.getAll()] else "dataplatform_dev"
+dbutils.widgets.text("catalog", "dataplatform_dev")
+dbutils.widgets.text("storage_account", "stdataplatformsyrendev01")
+dbutils.widgets.text("source_path", "landing/hello/")
+dbutils.widgets.dropdown("source_format", "csv", ["csv", "parquet", "json"])
 
-# Replace this source with the project-specific landing zone before production use.
-source_path = f"abfss://raw@storage{catalog.replace('_', '')}.dfs.core.windows.net/"
-raw = spark.read.format("parquet").load(source_path)
-raw.write.mode("append").format("delta").saveAsTable(f"{catalog}.raw.ingestion")
+catalog = dbutils.widgets.get("catalog")
+storage_account = dbutils.widgets.get("storage_account")
+source_path = dbutils.widgets.get("source_path").strip("/")
+source_format = dbutils.widgets.get("source_format")
+
+# COMMAND ----------
+
+# Read through the Unity Catalog external location for the raw container.
+source = f"abfss://raw@{storage_account}.dfs.core.windows.net/{source_path}/"
+reader = spark.read.format(source_format)
+if source_format == "csv":
+    reader = reader.option("header", "true")
+# Select _metadata explicitly: it's a hidden column that disappears after other transformations.
+raw = reader.load(source).select("*", "_metadata")
+if raw.isEmpty():
+    raise ValueError(f"No rows found in {source}")
+
+# COMMAND ----------
+
+target = f"{catalog}.raw.ingestion"
+(
+    raw.withColumn("_source_file", col("_metadata.file_path"))
+    .drop("_metadata")
+    .withColumn("_ingested_at", current_timestamp())
+    .write.mode("append")
+    .option("mergeSchema", "true")
+    .saveAsTable(target)
+)
+print(f"Appended {raw.count()} row(s) from {source} to {target}")

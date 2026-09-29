@@ -97,3 +97,32 @@ resource "databricks_secret_scope" "keyvault" {
 output "dev_storage_account_name" {
   value = azurerm_storage_account.dev.name
 }
+
+
+# Platform admins: full use plus MANAGE, so they can inspect and manage everyone's grants
+# (SHOW GRANTS) on objects the pipeline identity owns. ALL PRIVILEGES alone doesn't include MANAGE.
+# databricks_grant only manages each listed principal's privileges; other grants are untouched.
+locals {
+  uc_admin_grants = var.enable_databricks && var.enable_unity_catalog ? toset(var.uc_admin_principals) : toset([])
+}
+
+resource "databricks_grant" "catalog_admins" {
+  for_each   = local.uc_admin_grants
+  catalog    = databricks_catalog.dev[0].name
+  principal  = each.value
+  privileges = ["ALL_PRIVILEGES", "MANAGE"]
+}
+
+resource "databricks_grant" "external_location_admins" {
+  for_each          = local.uc_admin_grants
+  external_location = databricks_external_location.raw[0].id
+  principal         = each.value
+  privileges        = ["ALL_PRIVILEGES", "MANAGE"]
+}
+
+resource "databricks_grant" "storage_credential_admins" {
+  for_each           = local.uc_admin_grants
+  storage_credential = databricks_storage_credential.dev[0].id
+  principal          = each.value
+  privileges         = ["ALL_PRIVILEGES", "MANAGE"]
+}

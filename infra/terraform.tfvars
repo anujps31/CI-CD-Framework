@@ -13,4 +13,5 @@ enable_microservices               = true
 databricks_firstparty_sp_object_id = "207114a2-f5c6-402c-9aa6-34dbbdbd64a0"
 databricks_client_id               = "6afc6a32-8be0-4dfd-b2a5-08a10d64b1e5" # gitleaks:allow (application client ID, not a secret)
 aks_public_allowed_ip_ranges       = []
-enable_testing_access              = true # Temporary for the data testing team; see infra/testing_access.tf.
+enable_testing_access              = true                      # Temporary for the data testing team; see infra/testing_access.tf.
+uc_admin_principals                = ["anuj.s@syrencloud.com"] # Platform admins: can view and manage all Unity Catalog grants.

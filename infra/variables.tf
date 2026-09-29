@@ -173,3 +173,9 @@ variable "testing_group_name" {
   description = "Databricks account group that receives the temporary testing access."
   default     = "grp-dataplatform-dev-data-engineers"
 }
+
+variable "uc_admin_principals" {
+  type        = list(string)
+  description = "Users or groups given ALL PRIVILEGES + MANAGE on the catalog, external location and storage credential."
+  default     = []
+}

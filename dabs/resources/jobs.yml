@@ -24,3 +24,5 @@ resources:
             spark_version: 15.4.x-scala2.12
             node_type_id: Standard_DS3_v2
             num_workers: 1
+            # Unity Catalog needs an access mode; without it the cluster can't read governed tables.
+            data_security_mode: SINGLE_USER
