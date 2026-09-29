@@ -116,8 +116,9 @@ test_web() {
   grep -q ">${build_id}<" <<<"$private_page" || fail "private load balancer is not serving build ${build_id}"
   pass "${service} answered over the VNet at http://${private_ip}/ (private) for build ${build_id}"
 
-  public_ip="$(kubectl get service "$service" -n "$namespace" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-  echo "Browser (allowed IPs only): http://${public_ip:-<pending>}/"
+  # The public Service is optional (removed after the demo); don't fail if it's absent.
+  public_ip="$(kubectl get service "$service" -n "$namespace" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+  [[ -n "$public_ip" ]] && echo "Browser (allowed IPs only): http://${public_ip}/" || echo "Browser: no public Service (private only)"
   echo "Runner VM (curl):           http://${private_ip}/"
   rm -rf "$work"
 }
