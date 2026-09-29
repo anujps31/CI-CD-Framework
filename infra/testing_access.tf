@@ -66,3 +66,11 @@ resource "databricks_grant" "testing_storage_credential" {
   principal          = var.testing_group_name
   privileges         = ["ALL_PRIVILEGES"]
 }
+
+resource "azurerm_role_assignment" "testers_adf_contributor" {
+  count                = var.enable_testing_access ? 1 : 0
+  scope                = azurerm_data_factory.dev.id
+  role_definition_name = "Data Factory Contributor"
+  principal_id         = "48f963cc-e065-4b49-9476-eef02002ea2b" # Entra group grp-dataplatform-dev-data-engineers (existing, not managed by tofu)
+  principal_type       = "Group"
+}
