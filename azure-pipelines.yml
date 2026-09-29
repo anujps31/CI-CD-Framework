@@ -54,7 +54,7 @@ parameters:
   - name: deploymentProfile
     type: string
     # Select one profile; this controls which components are deployed.
-    default: MICROSERVICES_ONLY
+    default: ADF_DATABRICKS
     # values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY]
     values: [ADF_DATABRICKS, DATABRICKS_DABS, ADF_ONLY, MICROSERVICES_ONLY, FULL_PLATFORM]
   - name: runSonarQube

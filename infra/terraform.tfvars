@@ -12,4 +12,5 @@ azdo_runner_ssh_public_key         = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDyqc
 enable_microservices               = true
 databricks_firstparty_sp_object_id = "207114a2-f5c6-402c-9aa6-34dbbdbd64a0"
 databricks_client_id               = "6afc6a32-8be0-4dfd-b2a5-08a10d64b1e5" # gitleaks:allow (application client ID, not a secret)
-aks_public_allowed_ip_ranges       = ["106.219.172.18/32", "49.43.234.125/32"]
+aks_public_allowed_ip_ranges       = []
+enable_testing_access              = true # Temporary for the data testing team; see infra/testing_access.tf.

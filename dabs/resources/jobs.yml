@@ -3,6 +3,10 @@ resources:
   jobs:
     dataplatform_ingestion_job:
       name: dataplatform-ingestion-${bundle.target}
+      # Temporary for the data testing team: edit and run access to this job.
+      permissions:
+        - level: CAN_MANAGE
+          group_name: grp-dataplatform-dev-data-engineers
       tags:
         framework: plug-and-play-cicd
         environment: ${bundle.target}

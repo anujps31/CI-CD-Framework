@@ -161,3 +161,15 @@ variable "aks_public_allowed_ip_ranges" {
   description = "Client IP ranges (CIDR) allowed to reach public demo services on AKS, e.g. hello-web. Empty means no public access."
   default     = []
 }
+
+variable "enable_testing_access" {
+  type        = bool
+  description = "Temporary: interactive cluster and Unity Catalog grants for the data testing team (infra/testing_access.tf)."
+  default     = false
+}
+
+variable "testing_group_name" {
+  type        = string
+  description = "Databricks account group that receives the temporary testing access."
+  default     = "grp-dataplatform-dev-data-engineers"
+}

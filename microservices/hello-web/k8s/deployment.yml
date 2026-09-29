@@ -45,21 +45,21 @@ spec:
 ---
 # Public load balancer for the demo, reachable only from the listed client IP ranges.
 # The AKS subnet NSG must allow the same ranges on port 80 (see infra/network.tf).
-apiVersion: v1
-kind: Service
-metadata:
-  name: hello-web
-  labels:
-    app: hello-web
-spec:
-  type: LoadBalancer
-  selector:
-    app: hello-web
-  ports:
-    - name: http
-      port: 80
-      targetPort: 8080
-  loadBalancerSourceRanges: __ALLOWED_CIDRS__
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: hello-web
+#   labels:
+#     app: hello-web
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: hello-web
+#   ports:
+#     - name: http
+#       port: 80
+#       targetPort: 8080
+#   loadBalancerSourceRanges: __ALLOWED_CIDRS__
 ---
 # Private load balancer: an internal IP in the AKS subnet, reachable only from inside the VNet
 # (runner VM, pipeline agent). No firewall rule needed: the NSG allows VNet traffic by default.

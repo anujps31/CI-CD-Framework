@@ -7,6 +7,9 @@
   },
   "max_concurrent_runs": 1,
   "timeout_seconds": 1800,
+  "access_control_list": [
+    { "group_name": "grp-dataplatform-dev-data-engineers", "permission_level": "CAN_MANAGE" }
+  ],
   "tasks": [
     {
       "task_key": "hello_world",

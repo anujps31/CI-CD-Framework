@@ -99,7 +99,8 @@ test_web() {
 
   # Call the Service from inside the cluster: the public IP only admits the allowed client
   # ranges, and this agent is not one of them.
-  page="$(kubectl exec -n "$namespace" "deploy/${service}" -- wget -qO- "http://${service}.${namespace}.svc.cluster.local/")" \
+  # page="$(kubectl exec -n "$namespace" "deploy/${service}" -- wget -qO- "http://${service}.${namespace}.svc.cluster.local/")" \
+  page="$(kubectl exec -n "$namespace" "deploy/${service}" -- wget -qO- "http://${service}-internal.${namespace}.svc.cluster.local/")" \
     || fail "could not reach service ${service} in namespace ${namespace}"
   grep -q "<h1>Hello World</h1>" <<<"$page" || fail "${service} did not return the Hello World page"
   grep -q ">${build_id}<" <<<"$page" || fail "${service} is not serving this build (${build_id}); an older version may still be running"

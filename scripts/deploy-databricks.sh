@@ -19,6 +19,10 @@ for spec in "$jobs_dir"/*.json; do
   [[ -e "$spec" ]] || continue
   rendered="$(mktemp)"
   sed "s/__ENVIRONMENT__/${environment}/g" "$spec" > "$rendered"
+  # Optional "access_control_list" in a job file is applied separately: the Jobs create/reset
+  # settings don't carry permissions, and update-permissions only adds, never removes.
+  acl="$(jq -c '.access_control_list // empty' "$rendered")"
+  jq 'del(.access_control_list)' "$rendered" > "${rendered}.settings" && mv "${rendered}.settings" "$rendered"
   name="$(jq -r .name "$rendered")"
   job_id="$(databricks jobs list --name "$name" -o json \
     | jq -r 'if type == "array" then . else (.jobs // []) end | .[0].job_id // empty')"
@@ -29,6 +33,10 @@ for spec in "$jobs_dir"/*.json; do
     jq -n --argjson id "$job_id" --slurpfile s "$rendered" '{job_id: $id, new_settings: $s[0]}' > "${rendered}.reset"
     databricks jobs reset --json "@${rendered}.reset"
     echo "Updated job ${name} (${job_id})"
+  fi
+  if [[ -n "$acl" ]]; then
+    databricks jobs update-permissions "$job_id" --json "{\"access_control_list\": ${acl}}" > /dev/null
+    echo "Applied permissions to job ${name}"
   fi
   rm -f "$rendered" "${rendered}.reset"
 done

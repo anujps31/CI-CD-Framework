@@ -9,7 +9,8 @@ acr_name="${3:?ACR name is required}"          # ACR-NAME variable group value.
 aks_name="${4:?AKS name is required}"          # AKS-NAME variable group value.
 artifact_dir="${5:?artifact directory is required}"
 service_name="${6:-hello-web}"
-allowed_cidrs="${ALLOWED_CIDRS:?ALLOWED_CIDRS is required, for example 1.2.3.4/32,5.6.7.8/32}"
+# allowed_cidrs="${ALLOWED_CIDRS:?ALLOWED_CIDRS is required, for example 1.2.3.4/32,5.6.7.8/32}"
+allowed_cidrs="${ALLOWED_CIDRS:-}"   # Only needed while the manifest has a public Service.
 
 image_tag="${BUILD_BUILDID:-local}"
 image="${acr_name}.azurecr.io/${service_name}:${image_tag}"
@@ -46,13 +47,18 @@ wait_for_ip() {
   done
   printf '%s' "$ip"
 }
-public_ip="$(wait_for_ip "$service_name")"
+# public_ip="$(wait_for_ip "$service_name")"
+public_ip=""
+if kubectl get service "$service_name" -n "$namespace" >/dev/null 2>&1; then
+  public_ip="$(wait_for_ip "$service_name")"
+fi
 private_ip="$(wait_for_ip "${service_name}-internal")"
 
 if [[ -n "$public_ip" ]]; then
   echo "Public:  http://${public_ip}/  (only from: ${allowed_cidrs})"
 else
-  echo "##vso[task.logissue type=warning]${service_name} has no public IP yet; check: kubectl get service ${service_name} -n ${namespace}"
+  # echo "##vso[task.logissue type=warning]${service_name} has no public IP yet; check: kubectl get service ${service_name} -n ${namespace}"
+  echo "No public Service (private only)."
 fi
 if [[ -n "$private_ip" ]]; then
   echo "Private: http://${private_ip}/  (only from inside the VNet, e.g. the runner VM)"
