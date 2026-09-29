@@ -24,7 +24,8 @@ steps:
   - bash: |
       set -euo pipefail
       mkdir -p "$(Build.ArtifactStagingDirectory)/artifact"
-      cp -R adf notebooks databricks dabs microservices projects scripts "$(Build.ArtifactStagingDirectory)/artifact/"
+      cp -R adf notebooks dabs microservices projects scripts "$(Build.ArtifactStagingDirectory)/artifact/"
+      if [[ -d databricks ]]; then cp -R databricks "$(Build.ArtifactStagingDirectory)/artifact/"; fi
       printf '%s\n' "$(Build.SourceVersion)" > "$(Build.ArtifactStagingDirectory)/artifact/build-id.txt"
     displayName: Assemble immutable artifact
 
