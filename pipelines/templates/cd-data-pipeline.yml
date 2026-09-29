@@ -86,6 +86,8 @@ stages:
                         set -euo pipefail
                         export DATABRICKS_HOST="$(DATABRICKS-HOST)"
                         export DATABRICKS_AUTH_TYPE=azure-cli
+                        # Ignore any ~/.databrickscfg on the agent: always deploy as the pipeline identity.
+                        export DATABRICKS_CONFIG_FILE=/dev/null
                         databricks bundle validate -t "${{ parameters.environmentName }}"
                         databricks bundle deploy -t "${{ parameters.environmentName }}"
                 - ${{ if or(eq(parameters.deploymentProfile, 'FULL_PLATFORM'), eq(parameters.deploymentProfile, 'ADF_DATABRICKS')) }}:

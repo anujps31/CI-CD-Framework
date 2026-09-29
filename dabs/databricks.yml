@@ -1,6 +1,7 @@
 bundle:
   # The bundle keeps notebooks and jobs consistent across its named deployment targets.
   name: dataplatform-bundle
+  
 
 include:
   - resources/*.yml
@@ -23,7 +24,7 @@ targets:
   # This framework is Dev-only: dev is the sole bundle target.
   dev:
     # Azure branch dev deploys to this Databricks target.
-    mode: development
+    # No "mode": development mode is for personal copies; the pipeline deploys one shared copy.
     default: true
     workspace:
       # No "host" here: authentication fields can't use variables. The CLI reads the
