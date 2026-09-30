@@ -77,6 +77,6 @@ resource "azurerm_role_assignment" "testers_adf_contributor" {
 resource "databricks_secret_acl" "testers_keyvault_read" {
   count      = local.testing_access ? 1 : 0
   scope      = databricks_secret_scope.keyvault[0].name
-  principal  = databricks_group.account_data_engineers[0].display_name
+  principal  = "grp-dataplatform-dev-data-engineers" # Entra group grp-dataplatform-dev-data-engineers (existing, not managed by tofu)
   permission = "READ"
 }
