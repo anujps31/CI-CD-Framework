@@ -74,3 +74,9 @@ resource "azurerm_role_assignment" "testers_adf_contributor" {
   principal_id         = "48f963cc-e065-4b49-9476-eef02002ea2b" # Entra group grp-dataplatform-dev-data-engineers (existing, not managed by tofu)
   principal_type       = "Group"
 }
+resource "databricks_secret_acl" "testers_keyvault_read" {
+  count      = local.testing_access ? 1 : 0
+  scope      = databricks_secret_scope.keyvault[0].name
+  principal  = databricks_group.account_data_engineers[0].display_name
+  permission = "READ"
+}
