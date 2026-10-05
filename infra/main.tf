@@ -165,7 +165,7 @@ resource "azurerm_linux_virtual_machine" "azdo_runner" {
     trimspace(file("${path.module}/../scripts/register-self-hosted-agent.sh"))
   ), "\r", ""))
   identity { type = "SystemAssigned" }
-
+  boot_diagnostics {}
   admin_ssh_key {
     username   = "azureagent"
     public_key = var.azdo_runner_ssh_public_key
